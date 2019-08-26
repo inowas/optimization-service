@@ -1,0 +1,63 @@
+version: "3.7"
+
+services:
+  app:
+    build: ./app
+    restart: always
+    expose:
+      - 5000
+    labels:
+      - "traefik.docker.network=web"
+      - "traefik.enable=true"
+      - "traefik.wiki.frontend.rule=Host: ${HOST_URL}"
+      - "traefik.wiki.port=5000"
+      - "traefik.wiki.protocol=http"
+    networks:
+      - web
+    volumes:
+      - ./app:/app
+      - ./optimization-data:/optimization-data
+
+  db:
+    image: postgres
+    volumes:
+      - ./db-data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+
+  traefik:
+    image: traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - web
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik/acme.json:/acme.json
+      - ./traefik/traefik.toml:/traefik.toml
+      - ./traefik/logs:/logs
+
+  manager:
+    build: ./manager
+    restart: always
+    volumes:
+      - ./manager:/app
+      - ./optimization-data:/optimization-data
+    command: ["python", "manager.py"]
+
+  worker:
+    build: ./worker
+    restart: always
+    volumes:
+      - ./worker:/app
+      - ./optimization-data:/optimization-data
+    command: ["python", "worker.py"]
+
+networks:
+  web:
+    external: true
