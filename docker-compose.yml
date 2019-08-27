@@ -48,7 +48,7 @@ services:
     volumes:
       - ./manager:/app
       - ./optimization-data:/optimization-data
-    command: ["python", "manager.py"]
+    command: ["python", "-u", "manager.py"]
 
   worker:
     build: ./worker
@@ -56,7 +56,7 @@ services:
     volumes:
       - ./worker:/app
       - ./optimization-data:/optimization-data
-    command: ["python", "worker.py"]
+    command: ["python", "-u", "worker.py"]
 
 networks:
   web:

@@ -1,4 +1,5 @@
-.idea
-uploads/
-optimization-data/
 .env
+.idea
+db-data/
+optimization-data/
+uploads/
