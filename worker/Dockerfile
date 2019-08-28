@@ -20,6 +20,9 @@ RUN mv ./temp/* /usr/local/bin
 WORKDIR /app
 
 # Install packages
+RUN pip install numpy==1.12.0
+RUN pip install requests
+
 RUN pip install -r ./requirements.txt
 
 RUN rm -rf /pymake-1.1
