@@ -1,5 +1,3 @@
-numpy==1.12.0
 flopy
 scipy
 scikit-learn
-requests
