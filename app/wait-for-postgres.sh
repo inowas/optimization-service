@@ -7,7 +7,7 @@ host="$1"
 shift
 cmd="$@"
 
-until PGPASSWORD=root psql -h "$host" --username=root -c "\q"; do
+until PGPASSWORD=root psql -h "$host" -p 5432 -U root optimization -c "\q"; do
   >&2 echo "Postgres is unavailable - sleeping"
   sleep 1
 done

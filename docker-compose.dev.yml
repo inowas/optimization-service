@@ -1,11 +1,9 @@
-version: "3"
+version: "3.7"
 
 services:
   app:
     build: ./app
     restart: always
-    expose:
-      - 5000
     labels:
       - "traefik.docker.network=web"
       - "traefik.enable=true"
@@ -14,15 +12,10 @@ services:
       - "traefik.wiki.protocol=http"
     ports:
       - "5000:5000"
-    networks:
-      - web
     volumes:
       - ./app:/app
       - ./optimization-data:/optimization-data
-    depends_on:
-      - postgres
-    command: ["./wait-for-postgres.sh", "postgres:5432", "--", "python", "app.py"]
-
+    command: ["./wait-for-postgres.sh", "postgres", "python", "app.py"]
 
   postgres:
     image: postgres
@@ -51,10 +44,5 @@ services:
       - ./optimization-data:/optimization-data
     command: ["python", "-u", "worker.py"]
 
-networks:
-  web:
-    external: true
-  internal:
-
 volumes:
-  postgres:
+  postgres: {}
