@@ -1,4 +1,4 @@
-version: "3.7"
+version: "3"
 
 services:
   app:
@@ -19,16 +19,21 @@ services:
     volumes:
       - ./app:/app
       - ./optimization-data:/optimization-data
+    depends_on:
+      - postgres
+    command: ["./wait-for-postgres.sh", "postgres:5432", "--", "python", "app.py"]
 
-  db:
+
+  postgres:
     image: postgres
     volumes:
       - postgres:/var/lib/postgresql/data
     ports:
-      - 5432:5432
+      - "5432:5432"
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: root
+      POSTGRES_DB: optimization
 
   manager:
     build: ./manager
@@ -49,6 +54,7 @@ services:
 networks:
   web:
     external: true
+  internal:
 
 volumes:
   postgres:
