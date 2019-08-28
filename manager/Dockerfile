@@ -5,6 +5,7 @@ MAINTAINER Ralf Junghanns <ralf.junghanns@gmail.com>
 WORKDIR /app
 
 RUN pip install numpy==1.12.0
+RUN pip install requests
 
 # Install packages
 RUN pip install -r ./requirements.txt
