@@ -17,8 +17,11 @@ services:
     volumes:
       - ./app:/app
       - ./optimization-data:/optimization-data
+    depends_on:
+      - postgres
+    command: ["./wait-for-postgres.sh", "postgres", "python", "app.py"]
 
-  db:
+  postgres:
     image: postgres
     volumes:
       - postgres:/var/lib/postgresql/data
@@ -27,6 +30,7 @@ services:
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: root
+      POSTGRES_DB: optimization
 
   traefik:
     image: traefik
