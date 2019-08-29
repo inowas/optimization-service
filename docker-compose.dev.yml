@@ -14,8 +14,7 @@ services:
       - "5000:5000"
     volumes:
       - ./app:/app
-      - ./optimization-data:/optimization-data
-    command: ["./wait-for-postgres.sh", "postgres", "python", "app.py"]
+      - ./optimization-data:/optimization-datas
 
   postgres:
     image: postgres
