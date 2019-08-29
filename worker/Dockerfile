@@ -8,6 +8,10 @@ RUN buildDeps="unzip wget g++ gfortran make" && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Install required packages
+# Numpy needed in more current version then 1.12.0!
+RUN pip install numpy
+RUN pip install requests
 # Compile modflow-excecutables
 RUN pip install https://github.com/modflowpy/pymake/zipball/master
 
@@ -17,12 +21,11 @@ WORKDIR /scripts
 RUN for file in ./*; do python $file 2>/dev/null; done
 RUN mv ./temp/* /usr/local/bin
 
+COPY . /app
+
 WORKDIR /app
 
 # Install packages
-RUN pip install numpy==1.12.0
-RUN pip install requests
-
 RUN pip install -r ./requirements.txt
 
 RUN rm -rf /pymake-1.1
