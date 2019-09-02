@@ -1,0 +1,27 @@
+{
+  "author": "author",
+  "project": "project",
+  "optimization_id": "12345",
+  "type": "optimization_start",
+  "optimization": {
+    "parameters": {
+      "ngen": 250,
+      "pop_size": 100,
+      "mutpb": 0.1,
+      "cxpb": 0.9,
+      "eta": 20,
+      "indpb": 0.2
+    },
+    "objectives": [-1, -1],
+    "constraints": [
+      [-4, 4],
+      [-4, 4]
+    ]
+  },
+  "data": {
+    "functions": {
+      "f1": "x ** 2",
+      "f2": "(x - 2) ** 2"
+    }
+  }
+}
