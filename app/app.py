@@ -1,10 +1,12 @@
-from flask_sqlalchemy import SQLAlchemy
-from flask import Flask, request, render_template, flash
+from flask import Flask, request, render_template, jsonify
 from flask_cors import CORS, cross_origin
 import json
+from jsonschema import validate, ValidationError, SchemaError
 from models import db
 # Import of the models
 # https://www.compose.com/articles/using-postgresql-through-sqlalchemy/
+
+JSON_SCHEMA_UPLOAD = "./json_schema/schema_upload.json"
 
 DATABASE_URL = "postgresql+psycopg2://root:root@postgres:5432/optimization"
 
@@ -18,17 +20,42 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
-# db.session.commit()
 
 
 @app.route("/upload", methods=['GET', 'POST'])
 @cross_origin()
 def upload_file():
     if request.method == 'POST':
-        flash("Job successfully created. Redirected to optimization table.")
-        return json.dumps({
-            'status': 200
-        })
+        # https://stackoverflow.com/questions/46136478/flask-upload-how-to-get-file-name
+        if not request.files.get('file', None):
+            error = "No file selected!"
+            return render_template('upload.html', error=error)
+
+        # Get json from request
+        file_upload = request.files["file"]
+        req_data = json.load(file_upload)
+
+        with open(JSON_SCHEMA_UPLOAD, "r") as f:
+            schema_upload = json.load(f)
+
+        # Check the json against our json schema as provided in ./json_schema/schema_upload.json
+        try:
+            validate(instance=req_data, schema=schema_upload)
+        except ValidationError as e:
+            error = {
+                "message": f"Validation failed. {e.message}",
+                "code": e.validator,
+                "schemapath": e.schema_path
+            }
+
+            return render_template('upload.html', error=error)
+
+        except SchemaError as e:
+            error = str(e)
+
+            return render_template('upload.html', error=error)
+
+        return jsonify(req_data)
 
     if request.method == 'GET':
         if request.content_type == "application/json":
@@ -36,6 +63,8 @@ def upload_file():
                 'message': "test"
             })
         return render_template('upload.html')
+
+    return render_template('upload.html')
 
 
 if __name__ == "__main__":

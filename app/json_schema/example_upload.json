@@ -11,17 +11,22 @@
       "cxpb": 0.9,
       "eta": 20,
       "indpb": 0.2
-    },
-    "objectives": [-1, -1],
-    "constraints": [
-      [-4, 4],
-      [-4, 4]
-    ]
+    }
   },
   "data": {
     "functions": {
-      "f1": "x ** 2",
-      "f2": "(x - 2) ** 2"
+      "f1": {
+        "function": "x ** 2",
+        "objective": -1
+      },
+      "f2": {
+        "function": "(x - 2) ** 2",
+        "objective": -1
+      }
+    },
+    "individual": {
+      "genes": 8,
+      "boundaries": [-4, 4]
     }
   }
 }
