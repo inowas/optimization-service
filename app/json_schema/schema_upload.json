@@ -63,7 +63,8 @@
             "type": "object",
             "properties": {
               "function": {
-                "type": "string"
+                "type": "string",
+                "enum": ["optimization_start"]
               },
               "objective": {
                 "type": "integer",
