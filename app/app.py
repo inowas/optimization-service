@@ -1,8 +1,9 @@
 from flask import Flask, request, render_template, jsonify
 from flask_cors import CORS, cross_origin
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import Column, ForeignKey, Integer, String, PickleType
 import json
 from jsonschema import validate, ValidationError, SchemaError
-from models import db, OptimizationTask
 from pathlib import Path
 # Import of the models
 # https://www.compose.com/articles/using-postgresql-through-sqlalchemy/
@@ -30,12 +31,46 @@ CORS(app)
 
 # Add the created app to our database
 # Basically our empty database with its models gets the information to which existing database to connect
-db.init_app(app)
+db = SQLAlchemy(app)
+
+
+class OptimizationTask(db.Model):
+    __tablename__ = "optimization_tasks"
+
+    author = Column(String)
+    # Column for project
+    project = Column(String)
+    # # Column for calculation_id
+    # calculation_id = db.Column(db.String)
+    # # Column for model_id
+    # model_id = db.Column(db.String)
+    # Column for optimization_id
+    optimization_id = Column(String, primary_key=True)
+    # Column for type
+    type = Column(String)
+    # Column for version
+    # version = db.Column(db.String)
+    # Column for optimization
+    optimization = Column(PickleType)
+    # Column for data
+    # data = db.Column(db.PickleType)
+
+    def __init__(self, author, project, optimization_id, opt_type, optimization, **args):
+        super().__init__(**args)
+
+        self.author = author
+        self.project = project
+        # self.calculation_id = calculation_id
+        # self.model_id = model_id
+        self.optimization_id = optimization_id
+        self.type = opt_type
+        # self.version = version
+        self.optimization = optimization
+        # self.data = data
+
 
 # Now we want to create all our tables/models (here optimization_tasks table)
-# As we need to access the app we use app_context while creating the tables
-with app.app_context():
-    db.create_all()
+db.create_all()
 
 # Our main upload page where we put our json
 @app.route("/upload", methods=['GET', 'POST'])
@@ -86,7 +121,7 @@ def upload_file():
         project = req_data.get("project", "Standardprojekt")
         # optimization_id, optimization and type are necessary and can be retrieved directly
         optimization_id = req_data["optimization_id"]
-        type = req_data["type"]
+        opt_type = req_data["type"]
         optimization = req_data["optimization"]
         # data is also necessary and can be retrieved directly; data will be written as file, as it's a big chunk
         # of data and can easily be stored/loaded as json
@@ -97,7 +132,7 @@ def upload_file():
                                 author=author,
                                 project=project,
                                 optimization_id=optimization_id,
-                                opt_type=type,
+                                opt_type=opt_type,
                                 optimization=optimization
                             )
 
@@ -111,12 +146,10 @@ def upload_file():
                 # Write json to it
                 json.dump(data, f)
 
-            # With app_context
-            with app.app_context():
-                # Add task to table
-                db.session.add(optimizationtask)
-                # Push it to the server
-                db.session.commit()
+            # Add task to table
+            db.session.add(optimizationtask)
+            # Push it to the server
+            db.session.commit()
         except Exception:
             Path(filepath).unlink()
 
