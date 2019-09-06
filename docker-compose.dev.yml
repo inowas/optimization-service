@@ -26,6 +26,7 @@ services:
     restart: always
     volumes:
       - ./manager:/app
+      - ./app:/app/opt_app
       - ./optimization-data:/optimization-data
     command: ["python", "-u", "manager.py"]
 
@@ -34,6 +35,7 @@ services:
     restart: always
     volumes:
       - ./worker:/app
+      - ./app:/app/opt_app
       - ./optimization-data:/optimization-data
     command: ["python", "-u", "worker.py"]
 
