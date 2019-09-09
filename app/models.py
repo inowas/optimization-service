@@ -1,5 +1,7 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, PickleType
+from sqlalchemy.dialects.postgresql import UUID
+from uuid import uuid4
 
 
 # Add the created app to our database
@@ -13,22 +15,16 @@ class OptimizationTask(Base):
     author = Column(String)
     # Column for project
     project = Column(String)
-    # # Column for calculation_id
-    # calculation_id = db.Column(db.String)
-    # # Column for model_id
-    # model_id = db.Column(db.String)
     # Column for optimization_id
     optimization_id = Column(String, primary_key=True)
     # Column for type
-    type = Column(String)
-    # Column for version
-    # version = db.Column(db.String)
+    optimization_type = Column(String)
     # Column for optimization
     optimization = Column(PickleType)
     # Column for data
     # data = db.Column(db.PickleType)
 
-    def __init__(self, author, project, optimization_id, opt_type, optimization, **args):
+    def __init__(self, author, project, optimization_id, optimization_type, optimization, **args):
         super().__init__(**args)
 
         self.author = author
@@ -36,7 +32,7 @@ class OptimizationTask(Base):
         # self.calculation_id = calculation_id
         # self.model_id = model_id
         self.optimization_id = optimization_id
-        self.type = opt_type
+        self.optimization_type = optimization_type
         # self.version = version
         self.optimization = optimization
         # self.data = data
@@ -48,28 +44,20 @@ class CalculationTask(Base):
     author = Column(String)
     # Column for project
     project = Column(String)
-    # Column for calculation_id
-    calculation_id = Column(String)
     # Column for optimization_id
-    optimization_id = Column(String, primary_key=True)
+    optimization_id = Column(String)
+    # Column for calculation_id
+    calculation_id = Column(UUID(as_uuid=True), primary_key=True, unique=True, default=uuid4)
     # Column for type
-    type = Column(String)
-    # Column for version
-    version = Column(String)
-    # Column for optimization
-    optimization = Column(PickleType)
-    # Column for data
-    data = Column(PickleType)
+    calculation_type = Column(String)
+    # Column for calculation parameters
+    calculation_parameters = Column(PickleType)
 
-    def __init__(self, author, project, calculation_id, model_id, optimization_id, opt_type, version, optimization, data, **args):
+    def __init__(self, author, project, optimization_id, calculation_type, calculation_parameters, **args):
         super().__init__(**args)
 
         self.author = author
         self.project = project
-        self.calculation_id = calculation_id
-        self.model_id = model_id
         self.optimization_id = optimization_id
-        self.type = opt_type
-        self.version = version
-        self.optimization = optimization
-        self.data = data
+        self.calculation_type = calculation_type
+        self.calculation_parameters=calculation_parameters
