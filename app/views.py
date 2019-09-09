@@ -63,7 +63,7 @@ def upload_file():
         project = req_data.get("project", "Standardprojekt")
         # optimization_id, optimization and type are necessary and can be retrieved directly
         optimization_id = req_data["optimization_id"]
-        opt_type = req_data["type"]
+        optimization_type = req_data["optimization_type"]
         optimization = req_data["optimization"]
         # data is also necessary and can be retrieved directly; data will be written as file, as it's a big chunk
         # of data and can easily be stored/loaded as json
@@ -74,7 +74,7 @@ def upload_file():
                                 author=author,
                                 project=project,
                                 optimization_id=optimization_id,
-                                opt_type=opt_type,
+                                optimization_type=optimization_type,
                                 optimization=optimization
                             )
 

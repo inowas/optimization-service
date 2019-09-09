@@ -3,7 +3,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
 # from app.models import DATABASE_URL
-# from manager.models import CalculationTask
+from models import CalculationTask
 
 def run():
     while True:
