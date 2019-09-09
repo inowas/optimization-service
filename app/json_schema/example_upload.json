@@ -1,0 +1,32 @@
+{
+  "author": "author",
+  "project": "project",
+  "optimization_id": "12345",
+  "type": "optimization_start",
+  "optimization": {
+    "parameters": {
+      "ngen": 250,
+      "pop_size": 100,
+      "mutpb": 0.1,
+      "cxpb": 0.9,
+      "eta": 20,
+      "indpb": 0.2
+    }
+  },
+  "data": {
+    "functions": {
+      "f1": {
+        "function": "x ** 2",
+        "objective": -1
+      },
+      "f2": {
+        "function": "(x - 2) ** 2",
+        "objective": -1
+      }
+    },
+    "individual": {
+      "genes": 8,
+      "boundaries": [-4, 4]
+    }
+  }
+}

@@ -4,22 +4,16 @@ services:
   app:
     build: ./app
     restart: always
-    labels:
-      - "traefik.docker.network=web"
-      - "traefik.enable=true"
-      - "traefik.wiki.frontend.rule=Host: ${HOST_URL}"
-      - "traefik.wiki.port=5000"
-      - "traefik.wiki.protocol=http"
     ports:
       - "5000:5000"
     volumes:
       - ./app:/app
-      - ./optimization-data:/optimization-datas
+      - ./optimization-data:/optimization-data
 
   postgres:
     image: postgres
-#    volumes:
-#      - postgres:/var/lib/postgresql/data
+    volumes:
+      - postgres:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     environment:

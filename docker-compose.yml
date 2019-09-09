@@ -4,8 +4,6 @@ services:
   app:
     build: ./app
     restart: always
-    expose:
-      - 5000
     labels:
       - "traefik.docker.network=web"
       - "traefik.enable=true"
@@ -17,16 +15,11 @@ services:
     volumes:
       - ./app:/app
       - ./optimization-data:/optimization-data
-    depends_on:
-      - postgres
-    command: ["./wait-for-postgres.sh", "postgres", "python", "app.py"]
 
   postgres:
     image: postgres
     volumes:
       - postgres:/var/lib/postgresql/data
-    ports:
-      - 5432:5432
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: root
@@ -67,4 +60,4 @@ networks:
     external: true
 
 volumes:
-  postgres:
+  postgres: {}

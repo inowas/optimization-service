@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "http://example.com/product.schema.json",
+  "title": "Upload file",
+  "description": "A file from upload that holds all necessary information for an optimization task",
+  "type": "object",
+  "properties": {
+    "optimization_id": {
+      "description": "The unique identifier for an optimization task.",
+      "type": "string"
+    },
+    "optimization": {
+      "description": "The dictionary with all information regarding the optimization task.",
+      "type": "object",
+      "properties": {
+        "parameters": {
+          "description": "Optimization parameters holding information concerning the GA",
+          "type": "object",
+          "properties": {
+            "ngen": {
+              "description": "Number of generations of GA",
+              "type": "integer"
+            },
+            "pop_size": {
+              "description": "Population size of each generations populatipon",
+              "type": "integer"
+            },
+            "mutpb": {
+              "description": "Mutation probability for each individual in the population",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "cxpb": {
+              "description": "Crossing probability for each individual in the population",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "eta": {
+              "description": "Selection diverstity for next generation",
+              "type": "number"
+            },
+            "indpb": {
+              "description": "Independent probability for mutation that's adds to mutpb",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": ["ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "data": {
+      "description": "The basis data for the optimization that defines which functions are to be optimized",
+      "type": "object",
+      "properties": {
+        "functions": {
+          "description": "An object of functions that each present a single function with its objective",
+          "allOf": [{
+            "type": "object",
+            "properties": {
+              "function": {
+                "type": "string",
+                "enum": ["optimization_start"]
+              },
+              "objective": {
+                "type": "integer",
+                "enum": [-1, 1]
+              }
+            }
+          }]
+        },
+        "individual": {
+          "type": "object",
+          "properties": {
+            "genes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 15
+            },
+            "boundaries": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": ["optimization_id", "type", "optimization", "data"]
+}
