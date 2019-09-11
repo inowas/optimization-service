@@ -2,7 +2,7 @@
   "author": "author",
   "project": "project",
   "optimization_id": "12345",
-  "type": "optimization_start",
+  "optimization_state": "optimization_start",
   "optimization": {
     "parameters": {
       "ngen": 250,

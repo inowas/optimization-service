@@ -1,7 +1,8 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, PickleType
+from sqlalchemy import Column, String, Integer, Float
 from sqlalchemy.dialects.postgresql import UUID
 from uuid import uuid4
+from config import INIT_FITNESS
 
 
 # Add the created app to our database
@@ -18,24 +19,38 @@ class OptimizationTask(Base):
     # Column for optimization_id
     optimization_id = Column(String, primary_key=True)
     # Column for type
-    optimization_type = Column(String)
-    # Column for optimization
-    optimization = Column(PickleType)
-    # Column for data
-    # data = db.Column(db.PickleType)
+    optimization_state = Column(String)
+    # Column for current runs
+    current_pop = Column(Integer)
+    # Column for total runs
+    total_pop = Column(Integer)
+    # Column for current generation
+    current_gen = Column(Integer)
+    # Column for total generations
+    total_gen = Column(Integer)
+    # Column for fitness of optimization task after being finished
+    fitness = Column(Float)
+    # Column for optimization filepath
+    opt_filepath = Column(String)
+    # Column for data filepath
+    data_filepath = Column(String)
 
-    def __init__(self, author, project, optimization_id, optimization_type, optimization, **args):
+    def __init__(self, author, project, optimization_id, optimization_state, total_pop, total_gen,
+                 opt_filepath, data_filepath, **args):
         super().__init__(**args)
 
         self.author = author
         self.project = project
-        # self.calculation_id = calculation_id
-        # self.model_id = model_id
         self.optimization_id = optimization_id
-        self.optimization_type = optimization_type
-        # self.version = version
-        self.optimization = optimization
-        # self.data = data
+        self.optimization_state = optimization_state
+        self.current_pop = 0
+        self.total_pop = total_pop
+        self.current_gen = 0
+        self.total_gen = total_gen
+        # Really bad fitness
+        self.fitness = INIT_FITNESS
+        self.opt_filepath = opt_filepath
+        self.data_filepath = data_filepath
 
 
 class CalculationTask(Base):
@@ -49,15 +64,27 @@ class CalculationTask(Base):
     # Column for calculation_id
     calculation_id = Column(UUID(as_uuid=True), primary_key=True, unique=True, default=uuid4)
     # Column for type
-    calculation_type = Column(String)
-    # Column for calculation parameters
-    calculation_parameters = Column(PickleType)
+    calculation_state = Column(String)
+    # Column for Generation number
+    generation = Column(Integer)
+    # Column for individual (in range(popsize))
+    individual = Column(Integer)
+    # Column for calculation_input filepath
+    calcinput_filepath = Column(String)
+    # Column for calculation_output filepath
+    calcoutput_filepath = Column(String)
 
-    def __init__(self, author, project, optimization_id, calculation_type, calculation_parameters, **args):
+    def __init__(self, author, project, optimization_id, calculation_id, calculation_state, generation, individual,
+                 calcinput_filepath, calcoutput_filepath, **args):
         super().__init__(**args)
 
         self.author = author
         self.project = project
         self.optimization_id = optimization_id
-        self.calculation_type = calculation_type
-        self.calculation_parameters=calculation_parameters
+        # Generate unique uuid4 for calculation id
+        self.calculation_id = calculation_id
+        self.calculation_state = calculation_state
+        self.generation = generation
+        self.individual = individual
+        self.calcinput_filepath = calcinput_filepath
+        self.calcoutput_filepath = calcoutput_filepath

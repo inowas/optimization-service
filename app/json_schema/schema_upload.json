@@ -9,6 +9,11 @@
       "description": "The unique identifier for an optimization task.",
       "type": "string"
     },
+	"optimization_state": {
+	  "description": "A string that shows that the optimization is being started",
+	  "type": "string",
+      "enum": ["optimization_start"]
+	},
     "optimization": {
       "description": "The dictionary with all information regarding the optimization task.",
       "type": "object",
@@ -94,5 +99,5 @@
       }
     }
   },
-  "required": ["optimization_id", "type", "optimization", "data"]
+  "required": ["optimization_id", "optimization_state", "optimization", "data"]
 }
