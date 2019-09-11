@@ -6,11 +6,8 @@ from jsonschema import validate, ValidationError, SchemaError
 from pathlib import Path
 from db import Session
 from models import OptimizationTask
-from config import OPTIMIZATION_DATA, JSON_ENDING
-
-# Schema that has to be validated against the uploaded json
-JSON_SCHEMA_UPLOAD = "./json_schema/schema_upload.json"
-
+from config import OPTIMIZATION_DATA, OPT_EXT, DATA_EXT, JSON_ENDING
+from config import JSON_SCHEMA_UPLOAD
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -63,30 +60,41 @@ def upload_file():
         project = req_data.get("project", "Standardprojekt")
         # optimization_id, optimization and type are necessary and can be retrieved directly
         optimization_id = req_data["optimization_id"]
-        optimization_type = req_data["optimization_type"]
+        optimization_state = req_data["optimization_state"]
         optimization = req_data["optimization"]
+        # Samples for the optimization table to track progress
+        total_runs = optimization["parameters"]["pop_size"]
+        total_gens = optimization["parameters"]["ngen"]
         # data is also necessary and can be retrieved directly; data will be written as file, as it's a big chunk
         # of data and can easily be stored/loaded as json
         data = req_data["data"]
+
+        # Where to store the optimization/data
+        opt_filepath = f"{OPTIMIZATION_DATA}{optimization_id}{OPT_EXT}{JSON_ENDING}"
+        data_filepath = f"{OPTIMIZATION_DATA}{optimization_id}{DATA_EXT}{JSON_ENDING}"
 
         # Create instance of task
         optimizationtask = OptimizationTask(
                                 author=author,
                                 project=project,
                                 optimization_id=optimization_id,
-                                optimization_type=optimization_type,
-                                optimization=optimization
+                                optimization_state=optimization_state,  # Input: "optimization_start"
+                                total_runs=total_runs,
+                                total_gens=total_gens,
+                                opt_filepath=opt_filepath,
+                                data_filepath=data_filepath
                             )
-
-        # Where to store the data
-        filepath = f"{OPTIMIZATION_DATA}{optimization_id}{JSON_ENDING}"
 
         # Future: Check if optimization id exists in table and decide what to do if so
 
          # Try adding file to folder and adding job to table
         try:
             # Open created filepath
-            with open(filepath, "w") as f:
+            with open(opt_filepath, "w") as f:
+                # Write json to it
+                json.dump(optimization, f)
+            # Open created filepath
+            with open(data_filepath, "w") as f:
                 # Write json to it
                 json.dump(data, f)
 
@@ -95,7 +103,8 @@ def upload_file():
             # Push it to the server
             Session.commit()
         except Exception:
-            Path(filepath).unlink()
+            Path(opt_filepath).unlink()
+            Path(data_filepath).unlink()
 
         return jsonify(req_data)
 
