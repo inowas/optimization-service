@@ -6,13 +6,13 @@ import json
 import numpy as np
 from copy import deepcopy
 from uuid import uuid4
-from sqlalchemy.dialects.postgresql import UUID
+from .evolutionary_toolbox import GAToolbox
 # The following imports come from our flask app
 # We want to use the same database and we need the same models for our query
 from db import Session
 from models import OptimizationTask, CalculationTask
 from config import OPTIMIZATION_DATA, JSON_ENDING, CALC_INPUT_EXT, CALC_OUTPUT_EXT
-from config import OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN
+from config import OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH
 
 
 def run():
@@ -43,20 +43,31 @@ def run():
             new_opt_task.optimization_state = OPTIMIZATION_RUN
             Session.commit()
 
+            optimization_id = new_opt_task.optimization_id
+
             # Get filepaths
-            opt_path = new_opt_task.opt_path
-            data_path = new_opt_task.data_path
+            opt_filepath = new_opt_task.opt_path
+            data_filepath = new_opt_task.data_path
 
             ### Potential Error with loading ###
             # Open created filepath
-            with open(opt_path, "r") as f:
+            with open(opt_filepath, "r") as f:
                 # Read json from it into data
                 optimization = json.load(f)
 
-            with open(data_path, "r") as f:
+            with open(data_filepath, "r") as f:
                 # Read json from it into data
                 data = json.load(f)
             #####################################
+
+            gatoolbox = GAToolbox(
+                eta=optimization["parameters"]["eta"],
+                bounds=optimization["parameters"]["bounds"],
+                indpb=optimization["parameters"]["bounds"],
+                cxpb=optimization["parameters"]["bounds"],
+                mutpb=optimization["parameters"]["bounds"],
+                weights=(data["functions"][fun]["objective"] for fun in data["functions"])
+            )
 
             # Create calculation jobs depending on optimization
             # First we need the generation size to loop over
@@ -67,19 +78,24 @@ def run():
             ind_pars = data["individual"]
 
             # Start optimizing one task by looping over generations
-            for gen in range(1, ngen + 1):
+            for generation in range(1, ngen + 1):
                 # Set generation in optimization_task to gen (we can still use the same object, it's connected to
                 # Session)
-                new_opt_task.current_gen = gen
+                new_opt_task.current_gen = generation
                 Session.commit()
-                # Within this loop the following things happen:
-                # 1. Create calculation tasks
-                # Loop over population size to create individuals
-                for ind in range(1, pop_size + 1):
+
+                if generation == 1:
+                    population = gatoolbox.make_population(pop_size)
+                else:
+
+                    population = gatoolbox.optimize_evolutionary()
+
+                for ind_id, ind_genes in enumerate(population):
+                    individual = ind_id + 1
+
                     # Our individual consists of certain parameters as defined in data
                     calculation_parameters = {
-                        "ind_genes": list(np.random.random(ind_pars["genes"]) * np.diff(ind_pars["boundaries"]) +
-                                          np.min(ind_pars["boundaries"]))
+                        "ind_genes": ind_genes
                     }
 
                     # Generate a unique calculation_id
@@ -96,10 +112,13 @@ def run():
                     new_calc_task = CalculationTask(
                         author=new_opt_task.author,
                         project=new_opt_task.project,
-                        optimization_id=new_opt_task.optimization_id,
+                        optimization_id=optimization_id,
                         calculation_id=calculation_id,
                         # Set state to start
                         calculation_state=CALCULATION_START,
+                        generation=generation,
+                        individual=individual,
+                        data_filepath=data_filepath,
                         calcinput_filepath=calcinput_filepath,
                         calcoutput_filepath=calcoutput_filepath
                     )
@@ -111,19 +130,14 @@ def run():
                     # Add calculation task to session
                     Session.add(new_calc_task)
                     Session.commit()
-                # 2. Await a complete population to be finished
-                # 3. Summarize the population and based on this information create new calculation tasks with
-                # new parameters
 
-                pass
+                while True:
+                    current_calculation_finished = Session.query(CalculationTask). \
+                        filter(CalculationTask.generation == generation,
+                               CalculationTask.calculation_state == CALCULATION_FINISH).count()
 
-            # Remove old calculation input and output files
-            pass
-
-
-
-            # Continue to next run so that new 1./2./3./4. is executed
-            continue
+                    if current_calculation_finished == pop_size:
+                        break
 
         sleep(10)
 

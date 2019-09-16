@@ -29,15 +29,15 @@ def run():
             calculation_id = new_calc_task.calculation_id
 
             # Create filepaths to optimization data and calculation input
-            filepath_data = f"{OPTIMIZATION_DATA}{optimization_id}{DATA_EXT}{JSON_ENDING}"
-            filepath_calc_input = f"{OPTIMIZATION_DATA}{calculation_id}{CALC_INPUT_EXT}{JSON_ENDING}"
+            data_filepath = new_calc_task.data_filepath
+            calc_input_filepath = new_calc_task.calc_input_filepath
 
             # Load our data which powers the calculation (basically our model)
-            with open(filepath_data, "r") as f:
+            with open(data_filepath, "r") as f:
                 data_input = json.load(f)
 
             # Load our calculation parameters that define what makes this calculation different from others
-            with open(filepath_calc_input, "r") as f:
+            with open(calc_input_filepath, "r") as f:
                 calculation_parameters = json.load(f)
 
             # Generate x from individuals parameters
@@ -58,7 +58,7 @@ def run():
                 data_output["functions"][fun] = f(x)
 
             # Filepath for data/simulation output
-            filepath_calc_output = f"{OPTIMIZATION_DATA}{calculation_id}{CALC_OUTPUT_EXT}{JSON_ENDING}"
+            filepath_calc_output = new_calc_task.calc_output_filepath
 
             # Write the results as json so that manager can read them and process them
             with open(filepath_calc_output, "w") as f:
