@@ -69,13 +69,15 @@ class CalculationTask(Base):
     generation = Column(Integer)
     # Column for individual (in range(popsize))
     individual = Column(Integer)
+    # Column for data filepath
+    data_filepath = Column(String)
     # Column for calculation_input filepath
     calcinput_filepath = Column(String)
     # Column for calculation_output filepath
     calcoutput_filepath = Column(String)
 
     def __init__(self, author, project, optimization_id, calculation_id, calculation_state, generation, individual,
-                 calcinput_filepath, calcoutput_filepath, **args):
+                 data_filepath, calcinput_filepath, calcoutput_filepath, **args):
         super().__init__(**args)
 
         self.author = author
@@ -86,5 +88,6 @@ class CalculationTask(Base):
         self.calculation_state = calculation_state
         self.generation = generation
         self.individual = individual
+        self.data_filepath = data_filepath
         self.calcinput_filepath = calcinput_filepath
         self.calcoutput_filepath = calcoutput_filepath

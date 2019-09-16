@@ -6,21 +6,22 @@ populations based on the calculation results of an "old" finished population.
 # Imports
 import numpy as np
 from deap import base, creator, tools, algorithms
-from copy import deepcopy
+# from copy import deepcopy
 # Import of solvers NelderMeadSimplex
 from mystic.solvers import NelderMeadSimplexSolver
 # Import of the termination criteria which here is CRT, that is based on relative difference between candidates for
 # termination
 from mystic.termination import CandidateRelativeTolerance as CRT
 
+# HOF_SIZE = 10
 
-# Schaffer evaluation function
-def evaluate_individual(individual, funs):
-    # Get our x by calling the g function with unpacked individual
-    x = g_mod(individual, G_MOD_CONST)
-
-    # Now return both function values
-    return schaffer_f1(x), schaffer_f2(x)
+# # Schaffer evaluation function
+# def evaluate_individual(individual, fun_evals):
+#     # Get our x by calling the g function with unpacked individual
+#     x = g_mod(individual, G_MOD_CONST)
+#
+#     # Now return both function values
+#     return (fun(x) for fun in funs) # schaffer_f1(x), schaffer_f2(x)
 
 class GAToolbox:
     def __init__(self, eta, bounds, indpb, cxpb, mutpb, weights):
@@ -38,10 +39,11 @@ class GAToolbox:
         self.mate_method = tools.cxSimulatedBinaryBounded
         self.mutate_method = tools.mutPolynomialBounded
         self.select_method = tools.selNSGA2
-        # GA specific parameters
+        # Deap main structure
+        self.hall_of_fame = tools.ParetoFront()
         self.default_individual = None
         self.toolbox = None
-        self.hall_of_fame = None
+
 
         # Create our default individual which is used by our toolbox
         self.build_default_individual()
@@ -114,6 +116,9 @@ class GAToolbox:
 
         self.toolbox = toolbox
 
+    def make_population(self, population_size):
+        return self.toolbox.population(population_size)
+
     def optimize_evolutionary(self, individuals):
         """
         Args:
@@ -128,13 +133,21 @@ class GAToolbox:
         # Loop over individuals
         for ind in individuals:
             # Create a template for one individual
-            individual = deepcopy(self.default_individual())
+            individual = self.default_individual()
             # Add parameters
             individual.extend(ind["ind_genes"])
             # Add fitness values
             individual.fitness = (ind["functions"][fun] for fun in ind["functions"])
             # Add individual to population
             population.append(individual)
+
+        population, _ = algorithms.eaSimple(toolbox=self.toolbox,
+                                            population=population,
+                                            cxpb=self.cxpb,
+                                            mutpb=self.mutpb,
+                                            ngen=1,
+                                            halloffame=self.hall_of_fame,
+                                            verbose=False)
 
         # Now we can select the top n individuals
 
@@ -148,7 +161,7 @@ class GAToolbox:
         # First we have to build a population out of our individuals and their evaluates, which means that they
         # fit into our base
 
-        pass
+        return population
 
     def optimize_linear(self):
         pass
