@@ -6,6 +6,7 @@ populations based on the calculation results of an "old" finished population.
 # Imports
 import numpy as np
 from deap import base, creator, tools, algorithms
+from typing import List, Tuple
 # from copy import deepcopy
 # Import of solvers NelderMeadSimplex
 from mystic.solvers import NelderMeadSimplexSolver
@@ -23,8 +24,15 @@ from mystic.termination import CandidateRelativeTolerance as CRT
 #     # Now return both function values
 #     return (fun(x) for fun in funs) # schaffer_f1(x), schaffer_f2(x)
 
+
 class GAToolbox:
-    def __init__(self, eta, bounds, indpb, cxpb, mutpb, weights):
+    def __init__(self,
+                 eta: float,
+                 bounds: List[List[float]],
+                 indpb: float,
+                 cxpb: float,
+                 mutpb: float,
+                 weights: Tuple[int, int]):
         # Usecase related parameters
         self.eta = eta
         self.bounds = bounds
@@ -68,7 +76,7 @@ class GAToolbox:
 
         self.default_individual = creator.Individual
 
-    def make_candidate(self):
+    def make_candidate(self) -> List[float]:
         """
         Here we create our candidate based on the bounds given for every parameter. The difference to the individual is
         that a candidate only holds parameter values and has no fitness attribute.
@@ -116,10 +124,12 @@ class GAToolbox:
 
         self.toolbox = toolbox
 
-    def make_population(self, population_size):
+    def make_population(self,
+                        population_size: int) -> List[List[float]]:
         return self.toolbox.population(population_size)
 
-    def optimize_evolutionary(self, individuals):
+    def optimize_evolutionary(self,
+                              individuals: List[dict]) -> List[List[float]]:
         """
         Args:
             self - holds the toolbox

@@ -14,7 +14,7 @@ optimization_blueprint = Blueprint("optimization", __name__)
 # Our main upload page where we put our json
 @optimization_blueprint.route("/upload", methods=['GET', 'POST'])
 @cross_origin()
-def upload_file():
+def upload_file() -> jsonify:
     # This is our most important path
     if request.method == 'POST':
         # https://stackoverflow.com/questions/46136478/flask-upload-how-to-get-file-name

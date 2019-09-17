@@ -6,21 +6,22 @@ import json
 from sympy import lambdify, Symbol
 from db import Session
 from models import CalculationTask, OptimizationTask
-from config import OPTIMIZATION_DATA, DATA_EXT, CALC_INPUT_EXT, CALC_OUTPUT_EXT, JSON_ENDING
-
-from x_helper import g_mod
+from config import CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH
+from .x_helper import g_mod
 
 G_MOD_CONST = 10000
+
+X_SYMB = Symbol("x")
 
 def run():
     while True:
         # Check if there's a new job in calculation tasks table
         new_calc_task = Session.query(CalculationTask). \
-            filter(CalculationTask.calculation_type == "calculation_start").first()
+            filter(CalculationTask.calculation_type == CALCULATION_START).first()
         # If there actually is one
         if new_calc_task:
             # First important step is to set its type to calculation_run so that no other worker will do the same task
-            new_calc_task.calculation_type = "calculation_run"
+            new_calc_task.calculation_type = CALCULATION_RUN
             Session.commit()
 
             # Now the calculation can happen
@@ -44,18 +45,16 @@ def run():
             x = g_mod(calculation_parameters["ind_genes"], G_MOD_CONST)
 
             # Here: Create our functions from the  text
-            funs = data_input["functions"]
+            optimization_functions = data_input["functions"]
             # Our dictionary that will display our output data according to the functions we have calculated
             data_output = dict()
             data_output["ind_genes"] = calculation_parameters["ind_genes"]
             data_output["functions"] = dict()
             # Loop over functions
-            for fun in funs.keys():
-                # Create function from string
-                x_symb = Symbol("x")
-                f = lambdify(x_symb, funs[fun]["function"])
+            for function, function_dict in optimization_functions.items():
+                f = lambdify(X_SYMB, function_dict["function"])
                 # Calculate our "simulation" output
-                data_output["functions"][fun] = f(x)
+                data_output["functions"][function] = f(x)
 
             # Filepath for data/simulation output
             filepath_calc_output = new_calc_task.calc_output_filepath
@@ -65,7 +64,7 @@ def run():
                 json.dump(data_output, f)
 
             # Set the calculation type of the task to calculation_finish
-            new_calc_task.calculation_type = "calculation_finish"
+            new_calc_task.calculation_type = CALCULATION_FINISH
             # Add 1 to optimization current runs
             opt_task = Session.query(OptimizationTask).\
                 filter(OptimizationTask.optimization_id == optimization_id).first()

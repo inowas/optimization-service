@@ -1,12 +1,16 @@
 # Our helper function to create x values from an array
-def g(array):
+from typing import List
+
+
+def g(array: List[float]) -> float:
     x = sum([a * 2 ** exponent
              for exponent, a in enumerate(array)])
 
     return x
 
 
-def g_mod(array, const):
+def g_mod(array: List[float],
+          const: float) -> float:
     # Notice: We assume the function to be used with an input array of max size 12 for testing purposes.
     # Notice: With uniform distributed random values as input array, this function still doesn't generate
     # uniform distributed x values. This is due to the fact that each part of the polynom is multiplied
