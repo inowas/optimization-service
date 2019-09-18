@@ -21,13 +21,13 @@ class OptimizationTask(Base):
     # Column for type
     optimization_state = Column(String)
     # Column for current runs
-    current_pop = Column(Integer)
+    current_population = Column(Integer)
     # Column for total runs
-    total_pop = Column(Integer)
+    total_population = Column(Integer)
     # Column for current generation
-    current_gen = Column(Integer)
+    current_generation = Column(Integer)
     # Column for total generations
-    total_gen = Column(Integer)
+    total_generation = Column(Integer)
     # Column for fitness of optimization task after being finished
     fitness = Column(Float)
     # Column for optimization filepath
@@ -35,7 +35,7 @@ class OptimizationTask(Base):
     # Column for data filepath
     data_filepath = Column(String)
 
-    def __init__(self, author, project, optimization_id, optimization_state, total_pop, total_gen,
+    def __init__(self, author, project, optimization_id, optimization_state, total_population, total_generation,
                  opt_filepath, data_filepath, **args):
         super().__init__(**args)
 
@@ -43,10 +43,10 @@ class OptimizationTask(Base):
         self.project = project
         self.optimization_id = optimization_id
         self.optimization_state = optimization_state
-        self.current_pop = 0
-        self.total_pop = total_pop
-        self.current_gen = 0
-        self.total_gen = total_gen
+        self.current_population = 0
+        self.total_population = total_population
+        self.current_generation = 0
+        self.total_generation = total_generation
         # Really bad fitness
         self.fitness = INIT_FITNESS
         self.opt_filepath = opt_filepath

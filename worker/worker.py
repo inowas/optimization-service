@@ -2,8 +2,9 @@ import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
-import json
 from sympy import lambdify, Symbol
+
+from helper_functions import load_json, write_json
 from db import Session
 from models import CalculationTask, OptimizationTask
 from config import CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH
@@ -13,71 +14,78 @@ G_MOD_CONST = 10000
 
 X_SYMB = Symbol("x")
 
-def run():
-    while True:
-        # Check if there's a new job in calculation tasks table
-        new_calc_task = Session.query(CalculationTask). \
-            filter(CalculationTask.calculation_type == CALCULATION_START).first()
-        # If there actually is one
-        if new_calc_task:
-            # First important step is to set its type to calculation_run so that no other worker will do the same task
-            new_calc_task.calculation_type = CALCULATION_RUN
-            Session.commit()
 
-            # Now the calculation can happen
-            # Get the optimization_id/calculation_id first
-            optimization_id = new_calc_task.optimization_id
-            calculation_id = new_calc_task.calculation_id
+class WorkerManager:
+    def __init__(self,
+                 session,
+                 optimization_task,
+                 calculation_task,
+                 debug: bool = False):
+        self.session = session
+        self.optimization_task = optimization_task
+        self.calculation_task = calculation_task
+        self.debug = debug
 
-            # Create filepaths to optimization data and calculation input
-            data_filepath = new_calc_task.data_filepath
-            calc_input_filepath = new_calc_task.calc_input_filepath
+    def query_first_starting_calculationtask(self) -> Session.query:
+        """
 
-            # Load our data which powers the calculation (basically our model)
-            with open(data_filepath, "r") as f:
-                data_input = json.load(f)
+        Returns:
+            query - first optimization task in list
 
-            # Load our calculation parameters that define what makes this calculation different from others
-            with open(calc_input_filepath, "r") as f:
-                calculation_parameters = json.load(f)
+        """
+        return self.session.query(self.calculation_task)\
+            .filter(self.calculation_task.calculation_state == CALCULATION_START).first()
 
-            # Generate x from individuals parameters
-            x = g_mod(calculation_parameters["ind_genes"], G_MOD_CONST)
+    def query_optimizationtask_with_id(self,
+                                       optimization_id):
 
-            # Here: Create our functions from the  text
-            optimization_functions = data_input["functions"]
-            # Our dictionary that will display our output data according to the functions we have calculated
-            data_output = dict()
-            data_output["ind_genes"] = calculation_parameters["ind_genes"]
-            data_output["functions"] = dict()
-            # Loop over functions
-            for function, function_dict in optimization_functions.items():
-                f = lambdify(X_SYMB, function_dict["function"])
-                # Calculate our "simulation" output
-                data_output["functions"][function] = f(x)
+        return self.session.query(self.optimization_task).\
+            filter(self.optimization_task.optimization_id == optimization_id)
 
-            # Filepath for data/simulation output
-            filepath_calc_output = new_calc_task.calc_output_filepath
+    def run(self):
+        while True:
+            if self.debug:
+                print('No jobs, sleeping for 1 minute')
+                sleep(60)
 
-            # Write the results as json so that manager can read them and process them
-            with open(filepath_calc_output, "w") as f:
-                json.dump(data_output, f)
+            new_calculation_task = self.query_first_starting_calculationtask()
 
-            # Set the calculation type of the task to calculation_finish
-            new_calc_task.calculation_type = CALCULATION_FINISH
-            # Add 1 to optimization current runs
-            opt_task = Session.query(OptimizationTask).\
-                filter(OptimizationTask.optimization_id == optimization_id).first()
-            opt_task.current_run += 1
-            # Apply changes to database
-            Session.commit()
+            if new_calculation_task:
+                new_calculation_task.calculation_state = CALCULATION_RUN
+                Session.commit()
 
-            continue
+                data_input = load_json(new_calculation_task.data_filepath)
+                calculation_parameters = load_json(new_calculation_task.calc_input_filepath)
 
-        print('No jobs, sleeping for 1 minute')
-        sleep(60)
-        continue
+                x = g_mod(array=calculation_parameters["ind_genes"],
+                          const=G_MOD_CONST)
+
+                optimization_functions = data_input["functions"]
+
+                data_output = dict()
+                data_output["ind_genes"] = calculation_parameters["ind_genes"]
+                data_output["functions"] = dict()
+
+                for function, function_dict in optimization_functions.items():
+                    f = lambdify(X_SYMB, function_dict["function"])
+                    data_output["functions"][function] = f(x)
+
+                write_json(obj=data_output,
+                           filepath=new_calculation_task.calc_output_filepath)
+
+                new_calculation_task.calculation_type = CALCULATION_FINISH
+                optimization_task = self.query_optimizationtask_with_id(
+                    optimization_id=new_calculation_task.optimization_id)
+                optimization_task.current_population += 1
+                Session.commit()
 
 
 if __name__ == '__main__':
-    run()
+    worker_manager = WorkerManager(
+        session=Session,
+        optimization_task=OptimizationTask,
+        calculation_task=CalculationTask,
+        debug=True
+    )
+
+    worker_manager.run()
