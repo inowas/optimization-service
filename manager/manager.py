@@ -223,6 +223,9 @@ class OptimizationManager:
 
                 solution = self.gatoolbox.select_first_of_hall_of_fame()
 
+                solution = self.gatoolbox.optimize_linear(solution=solution)
+
+
 
 
                 # Todo delete files and write best individual in database

@@ -14,15 +14,9 @@ from mystic.solvers import NelderMeadSimplexSolver
 # termination
 from mystic.termination import CandidateRelativeTolerance as CRT
 
-# HOF_SIZE = 10
 
-# # Schaffer evaluation function
-# def evaluate_individual(individual, fun_evals):
-#     # Get our x by calling the g function with unpacked individual
-#     x = g_mod(individual, G_MOD_CONST)
-#
-#     # Now return both function values
-#     return (fun(x) for fun in funs) # schaffer_f1(x), schaffer_f2(x)
+def scalarize_solution(solution):
+    return sum(solution.fitness)
 
 
 class GAToolbox:
@@ -77,31 +71,34 @@ class GAToolbox:
         self.default_individual = creator.Individual
 
     def make_candidate(self) -> List[float]:
-        """
-        Here we create our candidate based on the bounds given for every parameter. The difference to the individual is
+        """ Function to create our candidate based on the bounds given for every parameter. The difference to the individual is
         that a candidate only holds parameter values and has no fitness attribute.
+
         Args:
             self - holds the bounds with which parameters are randomly chosen
+
         Returns:
             None - the candidate is used to create an individual in a way that it's the parameter holder
+
         """
-        # Individual holds a list of parameters
         individual = []
-        # For every bound
+
         for bound in self.bounds:
-            # We scale a random number (which is uniform distributed between 0 and 1) up to the range of the individual
-            # bound. For example of we draw a random number 0.5 and our parameter has a range of [0, 10] this would
-            # result in a candidate parameter of 5.
+            # Scale individual
             gen = list(np.random.random(1) * np.abs(np.diff(bound)) + np.min(bound))[0]
             individual.append(gen)
+
         return individual
 
-    def build_toolbox(self):
-        """
+    def build_toolbox(self) -> None:
+        """ Function to build our toolbox that mainly takes into account the parsed ga parameters from our upload
+
         Args:
             self - holds the functions make_individual, bounds,
+
         Returns:
             None - the base individual is written on self.default_individual
+
         """
 
         # Now toolbox with genetic algorithm functions is created
@@ -130,13 +127,14 @@ class GAToolbox:
 
     def evaluate_finished_calculations(self,
                                        individuals: List[dict]) -> List[List[float]]:
-        """
+        """ Function the complete the individuals with their fitness in form of the function returns
 
         Args:
-            individuals:
+            individuals: a list of dicts that define each individual - by parameters and by function evaluations
 
         Returns:
-            population
+            population: a population of individuals that have a fitness on them based on the function returns (tuple of
+            f1(individual), f2(individual), f3...)
 
         """
         population = []
@@ -155,13 +153,14 @@ class GAToolbox:
 
     def select_best_individuals(self,
                                 population):
-        """
+        """ Function wrapper to run the select function from our ga toolbox and also add those selected individuals to
+        the hall of fame
 
         Args:
-            population:
+            population: list of individuals with certain parameters
 
         Returns:
-
+            population: a ordered selection from the population based on the fitness
 
         """
         population = self.toolbox.select(population,
@@ -172,7 +171,7 @@ class GAToolbox:
         return population
 
     def select_first_of_hall_of_fame(self):
-        """
+        """ Function wrapper to return the first of equally optimal solutions of the paretofront-halloffame
 
         Returns:
             hall_of_fame: first individual (hall of fame solutions can be seen equally for a paretofront type of hall
@@ -184,12 +183,15 @@ class GAToolbox:
 
     def optimize_evolutionary(self,
                               individuals: List[dict]) -> List[List[float]]:
-        """
+        """ Function to optimize a list of individuals with an genetic algorithm from the deap library
+
         Args:
             self - holds the toolbox
             individuals - dictionaries that hold the genes of the individual (parameters) and the evaluate/function values
+
         Returns:
             None - the base individual is written on self.default_individual
+
         """
 
         # We have to build a population here that works with the toolbox
@@ -204,8 +206,26 @@ class GAToolbox:
 
         return population
 
-    def optimize_linear(self):
-        pass
+    def optimize_linear(self,
+                        solution: List[float]):
+        """ Function to optimize one solution linear by using the mystic library
+
+        Args:
+            solution:
+
+        Returns:
+
+
+        """
+        solver = NelderMeadSimplexSolver(dim=len(self.weights))
+
+        solver.SetInitialPoints(x0=solution)
+
+        solver.SetTermination(CRT())
+
+        solver.Solve(scalarize_solution)
+
+        return solver.Solution()
 
 
 
