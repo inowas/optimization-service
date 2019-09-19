@@ -128,17 +128,17 @@ class GAToolbox:
                         population_size: int) -> List[List[float]]:
         return self.toolbox.population(population_size)
 
-    def optimize_evolutionary(self,
-                              individuals: List[dict]) -> List[List[float]]:
-        """
-        Args:
-            self - holds the toolbox
-            individuals - dictionaries that hold the genes of the individual (parameters) and the evaluate/function values
-        Returns:
-            None - the base individual is written on self.default_individual
+    def evaluate_finished_calculations(self,
+                                       individuals: List[dict]) -> List[List[float]]:
         """
 
-        # We have to build a population here that works with the toolbox
+        Args:
+            individuals:
+
+        Returns:
+            population
+
+        """
         population = []
         # Loop over individuals
         for ind in individuals:
@@ -151,25 +151,56 @@ class GAToolbox:
             # Add individual to population
             population.append(individual)
 
-        population, _ = algorithms.eaSimple(toolbox=self.toolbox,
-                                            population=population,
-                                            cxpb=self.cxpb,
-                                            mutpb=self.mutpb,
-                                            ngen=1,
-                                            halloffame=self.hall_of_fame,
-                                            verbose=False)
+        return population
 
-        # Now we can select the top n individuals
+    def select_best_individuals(self,
+                                population):
+        """
 
-        ### EVALUATE HAS TO BE REPLACED BY SOME FUNCTION THAT TAKES INTO ACCOUNT THE CALCULATED VALUES BY WORKER ###
-        # toolbox.register("evaluate", schaffer_eval)
-        ############################################################################################################
+        Args:
+            population:
 
-        # Here we will apply evolutionary algorithms
-        # As we separate the algorithm itself and the calculation, we will have to take into account our individuals
-        # with their parameters as well as the function responses for all our given functions.
-        # First we have to build a population out of our individuals and their evaluates, which means that they
-        # fit into our base
+        Returns:
+
+
+        """
+        population = self.toolbox.select(population,
+                                         k=len(population))
+
+        self.hall_of_fame.update(population)
+
+        return population
+
+    def select_first_of_hall_of_fame(self):
+        """
+
+        Returns:
+            hall_of_fame: first individual (hall of fame solutions can be seen equally for a paretofront type of hall
+            of fame
+
+        """
+
+        return self.hall_of_fame[0]
+
+    def optimize_evolutionary(self,
+                              individuals: List[dict]) -> List[List[float]]:
+        """
+        Args:
+            self - holds the toolbox
+            individuals - dictionaries that hold the genes of the individual (parameters) and the evaluate/function values
+        Returns:
+            None - the base individual is written on self.default_individual
+        """
+
+        # We have to build a population here that works with the toolbox
+        population = self.evaluate_finished_calculations(individuals=individuals)
+
+        population = self.select_best_individuals(population=population)
+
+        population = algorithms.varAnd(population=population,
+                                       toolbox=self.toolbox,
+                                       cxpb=self.cxpb,
+                                       mutpb=self.mutpb)
 
         return population
 

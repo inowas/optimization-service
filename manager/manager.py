@@ -89,6 +89,13 @@ class OptimizationManager:
             filter(self.calculation_task.generation == generation,
                    self.calculation_task.calculation_state == CALCULATION_FINISH)
 
+    def summarize_finished_calculationtasks(self,
+                                            generation: int) -> List[dict]:
+        finished_calculationtasks = self.query_finished_calculationtasks(generation=generation)
+
+        return [load_json(calculation.calcoutput_filepath)
+                for calculation in finished_calculationtasks]
+
     def await_generation_finished(self,
                                   optimization_id,
                                   print_progress):
@@ -197,12 +204,9 @@ class OptimizationManager:
                     Session.commit()
 
                     if generation > 1:
-                        finished_calculationtasks = self.query_finished_calculationtasks(generation=generation)
+                        individuals = self.summarize_finished_calculationtasks(generation=generation)
 
-                        individuals_output = [load_json(calculation.calcoutput_filepath)
-                                              for calculation in finished_calculationtasks]
-
-                        population = gatoolbox.optimize_evolutionary(individuals=individuals_output)
+                        population = gatoolbox.optimize_evolutionary(individuals=individuals)
 
                     self.create_new_calculation_jobs(optimization_task=new_optimization_task,
                                                      generation=generation,
@@ -210,6 +214,16 @@ class OptimizationManager:
 
                     self.await_generation_finished(optimization_id=new_optimization_task.optimization_id,
                                                    print_progress=self.print_progress)
+
+                individuals = self.summarize_finished_calculationtasks(generation=(number_of_generations + 1))
+
+                population = self.gatoolbox.evaluate_finished_calculations(individuals=individuals)
+
+                self.gatoolbox.select_best_individuals(population=population)
+
+                solution = self.gatoolbox.select_first_of_hall_of_fame()
+
+
 
                 # Todo delete files and write best individual in database
 
