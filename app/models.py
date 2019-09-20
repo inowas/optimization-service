@@ -66,9 +66,9 @@ class CalculationTask(Base):
     # Column for type
     calculation_state = Column(String)
     # Column for Generation number
-    generation = Column(Integer)
+    generation = Column(String)
     # Column for individual (in range(popsize))
-    individual = Column(Integer)
+    individual_id = Column(String)
     # Column for data filepath
     data_filepath = Column(String)
     # Column for calculation_input filepath
@@ -76,18 +76,17 @@ class CalculationTask(Base):
     # Column for calculation_output filepath
     calcoutput_filepath = Column(String)
 
-    def __init__(self, author, project, optimization_id, calculation_id, calculation_state, generation, individual,
+    def __init__(self, author, project, optimization_id, calculation_id, calculation_state, generation, individual_id,
                  data_filepath, calcinput_filepath, calcoutput_filepath, **args):
         super().__init__(**args)
 
         self.author = author
         self.project = project
         self.optimization_id = optimization_id
-        # Generate unique uuid4 for calculation id
         self.calculation_id = calculation_id
         self.calculation_state = calculation_state
         self.generation = generation
-        self.individual = individual
+        self.individual_id = individual_id
         self.data_filepath = data_filepath
         self.calcinput_filepath = calcinput_filepath
         self.calcoutput_filepath = calcoutput_filepath

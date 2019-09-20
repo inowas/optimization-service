@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 import numpy as np
 from copy import deepcopy
+from functools import partial
 from uuid import uuid4
-from typing import Dict, Union, Tuple, List
+from typing import Dict, Union, Tuple, List, Optional
 from tqdm import tqdm
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
@@ -18,6 +19,10 @@ from db import Session
 from models import OptimizationTask, CalculationTask
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
     CALCULATION_FINISH
+
+
+def scalarize_solution(solution):
+    return sum(solution)
 
 
 class OptimizationManager:
@@ -83,31 +88,35 @@ class OptimizationManager:
             .filter(self.optimization_task.optimization_state == OPTIMIZATION_START).first()
 
     def query_finished_calculationtasks(self,
-                                        generation):
+                                        generation: str):
 
         return self.session.query(self.calculation_task).\
             filter(self.calculation_task.generation == generation,
                    self.calculation_task.calculation_state == CALCULATION_FINISH)
 
     def summarize_finished_calculationtasks(self,
-                                            generation: int) -> List[dict]:
+                                            generation: str) -> List[dict]:
         finished_calculationtasks = self.query_finished_calculationtasks(generation=generation)
 
         return [load_json(calculation.calcoutput_filepath)
                 for calculation in finished_calculationtasks]
 
     def await_generation_finished(self,
-                                  optimization_id,
-                                  print_progress):
-        total_population = Session.query(self.optimization_task).\
-            filter(self.optimization_task.optimization_id == optimization_id).total_population
+                                  optimization_id: str,
+                                  generation: str,
+                                  total_population: Optional[str] = None,
+                                  print_progress: bool = False):
+        if not total_population:
+            total_population = Session.query(self.optimization_task).\
+                filter(self.optimization_task.optimization_id == optimization_id).total_population
 
         if print_progress:
             pbar = tqdm(total=total_population)
 
         while True:
-            current_population = Session.query(self.optimization_task).\
-                filter(self.optimization_task.optimization_id == optimization_id).current_population
+            current_population = Session.query(self.calculation_task).\
+                filter(self.calculation_task.optimization_id == optimization_id,
+                       self.calculation_task.generation == generation).count()
 
             if print_progress:
                 pbar.update(current_population - pbar.n)
@@ -118,42 +127,73 @@ class OptimizationManager:
         if print_progress:
             pbar.close()
 
+    def create_single_calculation_job(self,
+                                      optimization_task: OptimizationTask,
+                                      generation: str,
+                                      individual: List[float],
+                                      individual_id: str) -> None:
+        calculation_parameters = {
+            "ind_genes": individual
+        }
+
+        calculation_id = self.create_unique_id()
+
+        calcinput_filepath, calcoutput_filepath = create_input_and_output_filepath(task_id=calculation_id,
+                                                                                   extensions=[CALC_INPUT_EXT,
+                                                                                               CALC_OUTPUT_EXT])
+
+        new_calc_task = self.calculation_task(
+            author=optimization_task.author,
+            project=optimization_task.project,
+            optimization_id=optimization_task.optimization_id,
+            calculation_id=calculation_id,
+            # Set state to start
+            calculation_state=CALCULATION_START,
+            generation=generation,
+            individual_id=individual_id,
+            data_filepath=optimization_task.data_filepath,
+            calcinput_filepath=calcinput_filepath,
+            calcoutput_filepath=calcoutput_filepath
+        )
+
+        write_json(obj=calculation_parameters,
+                   filepath=calcinput_filepath)
+
+        Session.add(new_calc_task)
+        Session.commit()
+
     def create_new_calculation_jobs(self,
                                     optimization_task,
-                                    generation,
+                                    generation: str,
                                     population):
-        for ind_id, ind_genes in enumerate(population):
-            individual = ind_id + 1
+        for i, individual in enumerate(population):
+            self.create_single_calculation_job(optimization_task=optimization_task,
+                                               generation=generation,
+                                               individual=individual,
+                                               individual_id=str(i+1))
 
-            calculation_parameters = {
-                "ind_genes": ind_genes
-            }
+    def linear_optimization_queue(self,
+                                  optimization_task,
+                                  individual,
+                                  print_progress):
+        generation = "linear_optimization"
+        individual_id = "1"
 
-            calculation_id = self.create_unique_id()
+        self.create_single_calculation_job(optimization_task=optimization_task,
+                                           generation=generation,
+                                           individual=individual,
+                                           individual_id=individual_id)
 
-            calcinput_filepath, calcoutput_filepath = create_input_and_output_filepath(task_id=calculation_id,
-                                                                                       extensions=[CALC_INPUT_EXT,
-                                                                                                   CALC_OUTPUT_EXT])
+        self.await_generation_finished(optimization_id=optimization_task.optimization_id,
+                                       generation=generation,
+                                       total_population=individual_id,
+                                       print_progress=print_progress)
 
-            new_calc_task = self.calculation_task(
-                author=optimization_task.author,
-                project=optimization_task.project,
-                optimization_id=optimization_task.optimization_id,
-                calculation_id=calculation_id,
-                # Set state to start
-                calculation_state=CALCULATION_START,
-                generation=generation,
-                individual=individual,
-                data_filepath=optimization_task.data_filepath,
-                calcinput_filepath=calcinput_filepath,
-                calcoutput_filepath=calcoutput_filepath
-            )
+        solution_dict = self.summarize_finished_calculationtasks(generation=generation)
 
-            write_json(obj=calculation_parameters,
-                       filepath=calcinput_filepath)
+        solution = tuple(solution_dict["functions"][fun] for fun in solution_dict["functions"])
 
-            Session.add(new_calc_task)
-            Session.commit()
+        return scalarize_solution(solution)
 
     def run(self):
         """ Function run is used to keep the manager working constantly. It manages the following tasks:
@@ -199,20 +239,21 @@ class OptimizationManager:
                 population = gatoolbox.make_population(population_size)
 
                 for generation in range(1, number_of_generations + 1):
-                    new_optimization_task.current_generation = generation
+                    new_optimization_task.current_generation = str(generation)
                     new_optimization_task.current_population = 0
                     Session.commit()
 
                     if generation > 1:
-                        individuals = self.summarize_finished_calculationtasks(generation=generation)
+                        individuals = self.summarize_finished_calculationtasks(generation=str(generation))
 
                         population = gatoolbox.optimize_evolutionary(individuals=individuals)
 
                     self.create_new_calculation_jobs(optimization_task=new_optimization_task,
-                                                     generation=generation,
+                                                     generation=str(generation),
                                                      population=population)
 
                     self.await_generation_finished(optimization_id=new_optimization_task.optimization_id,
+                                                   generation=str(generation),
                                                    print_progress=self.print_progress)
 
                 individuals = self.summarize_finished_calculationtasks(generation=(number_of_generations + 1))
@@ -223,12 +264,10 @@ class OptimizationManager:
 
                 solution = self.gatoolbox.select_first_of_hall_of_fame()
 
-                solution = self.gatoolbox.optimize_linear(solution=solution)
-
-
-
-
-                # Todo delete files and write best individual in database
+                solution = self.gatoolbox.optimize_linear(solution=solution,
+                                                          function=partial(self.linear_optimization_queue,
+                                                                           optimization_task=new_optimization_task,
+                                                                           print_progress=self.print_progress))
 
 
 if __name__ == '__main__':

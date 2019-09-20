@@ -4,19 +4,12 @@ populations based on the calculation results of an "old" finished population.
 """
 
 # Imports
+from typing import List, Tuple
 import numpy as np
 from deap import base, creator, tools, algorithms
-from typing import List, Tuple
-# from copy import deepcopy
-# Import of solvers NelderMeadSimplex
+from copy import deepcopy
 from mystic.solvers import NelderMeadSimplexSolver
-# Import of the termination criteria which here is CRT, that is based on relative difference between candidates for
-# termination
 from mystic.termination import CandidateRelativeTolerance as CRT
-
-
-def scalarize_solution(solution):
-    return sum(solution.fitness)
 
 
 class GAToolbox:
@@ -103,12 +96,8 @@ class GAToolbox:
 
         # Now toolbox with genetic algorithm functions is created
         toolbox = base.Toolbox()
-        # Candidate (container for individual) is added with function make_individual that creates a pair of x1, x2
-        # values; function is called with limits of x1, x2 respectively
         toolbox.register("candidate", self.make_candidate, self.bounds)
-        # Individuals are created by calling the candidate function which again calls the make_individual function
         toolbox.register("individual", tools.initIterate, deepcopy(self.default_individual), toolbox.candidate)
-        # Population is created putting a number of individuals in a list
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
         # Function for mating is set to be simulated binary bounded (means parameters can't leave the given range of
@@ -138,15 +127,13 @@ class GAToolbox:
 
         """
         population = []
-        # Loop over individuals
         for ind in individuals:
-            # Create a template for one individual
             individual = self.default_individual()
-            # Add parameters
+
             individual.extend(ind["ind_genes"])
-            # Add fitness values
+
             individual.fitness = (ind["functions"][fun] for fun in ind["functions"])
-            # Add individual to population
+
             population.append(individual)
 
         return population
@@ -193,8 +180,6 @@ class GAToolbox:
             None - the base individual is written on self.default_individual
 
         """
-
-        # We have to build a population here that works with the toolbox
         population = self.evaluate_finished_calculations(individuals=individuals)
 
         population = self.select_best_individuals(population=population)
@@ -207,14 +192,17 @@ class GAToolbox:
         return population
 
     def optimize_linear(self,
-                        solution: List[float]):
+                        solution: List[float],
+                        function) -> List[float]:
         """ Function to optimize one solution linear by using the mystic library
 
         Args:
-            solution:
+            solution: the initial solution that the solver starts with
+            function: the callback function that sends out the task to the database, awaits the result and takes it
+            back in
 
         Returns:
-
+            solution: a linear optimized solution
 
         """
         solver = NelderMeadSimplexSolver(dim=len(self.weights))
@@ -223,9 +211,6 @@ class GAToolbox:
 
         solver.SetTermination(CRT())
 
-        solver.Solve(scalarize_solution)
+        solver.Solve(function)
 
         return solver.Solution()
-
-
-
