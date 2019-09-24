@@ -72,23 +72,26 @@ def upload_file() -> jsonify:
                                 optimization_state=optimization_state,  # Input: "optimization_start"
                                 total_population=population_size,
                                 total_generation=total_generation,
+                                solution=dict(),
                                 opt_filepath=opt_filepath,
                                 data_filepath=data_filepath
                             )
 
-        # Future: Check if optimization id exists in table and decide what to do if so
+        # Todo Check if optimization id exists in table and decide what to do if so
 
-         # Try adding file to folder and adding job to table
         try:
             write_json(obj=optimization,
                        filepath=opt_filepath)
+
             write_json(obj=data,
                        filepath=data_filepath)
 
             Session.add(optimizationtask)
+
             Session.commit()
         except Exception:
             Path(opt_filepath).unlink()
+
             Path(data_filepath).unlink()
 
         return jsonify(req_data)

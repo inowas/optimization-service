@@ -1,8 +1,8 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Integer, Float
+from sqlalchemy import Column, String, Integer, Float, PickleType
 from sqlalchemy.dialects.postgresql import UUID
 from uuid import uuid4
-from config import INIT_FITNESS
+from config import INITIAL_SCALAR_FITNESS
 
 
 # Add the created app to our database
@@ -28,15 +28,17 @@ class OptimizationTask(Base):
     current_generation = Column(Integer)
     # Column for total generations
     total_generation = Column(Integer)
+    # Column for calculated solution
+    solution = Column(PickleType)
     # Column for fitness of optimization task after being finished
-    fitness = Column(Float)
+    scalar_fitness = Column(Float)
     # Column for optimization filepath
     opt_filepath = Column(String)
     # Column for data filepath
     data_filepath = Column(String)
 
     def __init__(self, author, project, optimization_id, optimization_state, total_population, total_generation,
-                 opt_filepath, data_filepath, **args):
+                 solution, opt_filepath, data_filepath, **args):
         super().__init__(**args)
 
         self.author = author
@@ -47,8 +49,8 @@ class OptimizationTask(Base):
         self.total_population = total_population
         self.current_generation = 0
         self.total_generation = total_generation
-        # Really bad fitness
-        self.fitness = INIT_FITNESS
+        self.solution = solution
+        self.fitness = INITIAL_SCALAR_FITNESS
         self.opt_filepath = opt_filepath
         self.data_filepath = data_filepath
 

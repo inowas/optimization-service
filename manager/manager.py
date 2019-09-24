@@ -88,7 +88,7 @@ class OptimizationManager:
             .filter(self.optimization_task.optimization_state == OPTIMIZATION_START).first()
 
     def query_finished_calculationtasks(self,
-                                        generation: str):
+                                        generation: str) -> Session.query:
 
         return self.session.query(self.calculation_task).\
             filter(self.calculation_task.generation == generation,
@@ -193,7 +193,28 @@ class OptimizationManager:
 
         solution = tuple(solution_dict["functions"][fun] for fun in solution_dict["functions"])
 
+        optimization_task.scalar_fitness = scalarize_solution(solution)
+        self.session.commit()
+
         return scalarize_solution(solution)
+
+    def remove_optimization_and_calculation_data(self,
+                                                 optimization_id: uuid4) -> None:
+        optimization_task = self.session.query(self.optimization_task).filter(
+            self.optimization_task.optimization_id == optimization_id
+        )
+
+        Path(optimization_task.opt_filepath).unlink()
+        Path(optimization_task.data_filepath).unlink()
+
+        calculations = self.session.query(self.calculation_task)
+
+        calculation_files = [(calculation.calcinputfilepath,  calculation.calcoutput_filepath)
+                             for calculation in calculations]
+
+        for calcinput_file, calcoutput_file in calculation_files:
+            Path(calcinput_file).unlink()
+            Path(calcoutput_file).unlink()
 
     def run(self):
         """ Function run is used to keep the manager working constantly. It manages the following tasks:
@@ -268,6 +289,11 @@ class OptimizationManager:
                                                           function=partial(self.linear_optimization_queue,
                                                                            optimization_task=new_optimization_task,
                                                                            print_progress=self.print_progress))
+
+                new_optimization_task.solution = solution
+                self.session.commit()
+
+                self.remove_optimization_and_calculation_data(optimization_id=new_optimization_task.optimization_id)
 
 
 if __name__ == '__main__':
