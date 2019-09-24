@@ -96,7 +96,7 @@ class GAToolbox:
 
         # Now toolbox with genetic algorithm functions is created
         toolbox = base.Toolbox()
-        toolbox.register("candidate", self.make_candidate, self.bounds)
+        toolbox.register("candidate", self.make_candidate)
         toolbox.register("individual", tools.initIterate, deepcopy(self.default_individual), toolbox.candidate)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 

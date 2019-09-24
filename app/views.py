@@ -107,5 +107,5 @@ def upload_file() -> jsonify:
 # Our optimization page where we can see the progress of running optimizations
 @optimization_blueprint.route("/optimization", methods=["GET"])
 @cross_origin()
-def show_optimizations():
+def show_optimization():
     pass

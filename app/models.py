@@ -64,7 +64,7 @@ class CalculationTask(Base):
     # Column for optimization_id
     optimization_id = Column(String)
     # Column for calculation_id
-    calculation_id = Column(UUID(as_uuid=True), primary_key=True, unique=True, default=uuid4)
+    calculation_id = Column(UUID(as_uuid=True), primary_key=True, unique=True)
     # Column for type
     calculation_state = Column(String)
     # Column for Generation number
