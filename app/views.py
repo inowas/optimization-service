@@ -89,10 +89,12 @@ def upload_file() -> jsonify:
             Session.add(optimizationtask)
 
             Session.commit()
-        except Exception:
+        except (UnicodeDecodeError, IOError):
             Path(opt_filepath).unlink()
 
             Path(data_filepath).unlink()
+
+            Session.rollback()
 
         return jsonify(req_data)
 

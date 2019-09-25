@@ -12,7 +12,7 @@ from mystic.solvers import NelderMeadSimplexSolver
 from mystic.termination import CandidateRelativeTolerance as CRT
 
 
-class GAToolbox:
+class EAToolbox:
     def __init__(self,
                  eta: float,
                  bounds: List[List[float]],
@@ -132,7 +132,8 @@ class GAToolbox:
 
             individual.extend(ind["ind_genes"])
 
-            individual.fitness = (ind["functions"][fun] for fun in ind["functions"])
+            individual.fitness.values = tuple(ind["functions"][fun] for fun in ind["functions"])
+            # individual.fitness.valid = True
 
             population.append(individual)
 

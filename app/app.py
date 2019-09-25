@@ -4,7 +4,6 @@ from views import optimization_blueprint
 from config import DATABASE_URL
 from models import Base
 from db import engine
-# Import of the models
 # https://www.compose.com/articles/using-postgresql-through-sqlalchemy/
 
 
@@ -20,7 +19,6 @@ app.register_blueprint(optimization_blueprint)
 CORS(app)
 
 Base.metadata.create_all(engine)
-
 
 if __name__ == "__main__":
     app.secret_key = '2349978342978342907889709154089438989043049835890'

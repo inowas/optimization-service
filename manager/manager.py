@@ -12,11 +12,11 @@ from typing import Dict, Union, Tuple, List, Optional
 from tqdm import tqdm
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
-from evolutionary_toolbox import GAToolbox
+from evolutionary_toolbox import EAToolbox
 # The following imports come from our flask app
 # We want to use the same database and we need the same models for our query
 from db import Session
-from models import OptimizationTask, CalculationTask
+from models import OptimizationTask, CalculationTaskEvolutionaryOptimization, CalculationTaskLinearOptimization
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
     CALCULATION_FINISH, OPTIMIZATION_FINISH
 
@@ -28,16 +28,18 @@ def scalarize_solution(solution):
 class OptimizationManager:
     def __init__(self,
                  session,
-                 gatoolbox,
+                 ea_toolbox,
                  optimization_task,
-                 calculation_task,
+                 calculation_task_evolutionary_optimization,
+                 calculation_task_linear_optimization,
                  debug: bool = False,
                  print_progress: bool = False):
         self.session = session
-        self.gatoolbox = gatoolbox
+        self.ea_toolbox = ea_toolbox
 
-        self.optimization_task = optimization_task
-        self.calculation_task = calculation_task
+        self.ot = optimization_task
+        self.ct_eo = calculation_task_evolutionary_optimization
+        self.ct_lo = calculation_task_linear_optimization
 
         self.debug = debug
         self.debug_counter = 0
@@ -77,71 +79,108 @@ class OptimizationManager:
         """
         return tuple(data["functions"][fun]["objective"] for fun in data["functions"])
 
-    def query_first_starting_optimizationtask(self) -> Session.query:
+    def query_first_starting_optimization_task(self) -> Session.query:
         """
 
         Returns:
             query - first optimization task in list
 
         """
-        return self.session.query(self.optimization_task)\
-            .filter(self.optimization_task.optimization_state == OPTIMIZATION_START).first()
+        return self.session.query(self.ot)\
+            .filter(self.ot.optimization_state == OPTIMIZATION_START).first()
 
-    def query_optimizationtask_with_id(self,
-                                       optimization_id: uuid4) -> Session.query:
+    def query_optimization_task_with_id(self,
+                                        optimization_id: uuid4) -> Session.query:
+        """
 
-        return self.session.query(self.optimization_task).\
-            filter(self.optimization_task.optimization_id == optimization_id).first()
+        :param optimization_id:
+        :return:
+        """
 
-    def query_finished_calculationtasks(self,
-                                        generation: int) -> Session.query:
+        return self.session.query(self.ot).\
+            filter(self.ot.optimization_id == optimization_id).first()
 
-        return self.session.query(self.calculation_task).\
-            filter(self.calculation_task.generation == generation,
-                   self.calculation_task.calculation_state == CALCULATION_FINISH).all()
+    def query_finished_calculation_tasks(self,
+                                         ct_table: Union[CalculationTaskEvolutionaryOptimization,
+                                                         CalculationTaskLinearOptimization],
+                                         generation: int) -> Session.query:
+        """
 
-    def summarize_finished_calculationtasks(self,
-                                            generation: int) -> List[dict]:
-        finished_calculationtasks = self.query_finished_calculationtasks(generation=generation)
+        :param ct_table:
+        :param generation:
+        :return:
+        """
+
+        return self.session.query(ct_table).\
+            filter(ct_table.generation == generation,
+                   ct_table.calculation_state == CALCULATION_FINISH).all()
+
+    def summarize_finished_calculation_tasks(self,
+                                             ct_table: Union[CalculationTaskEvolutionaryOptimization,
+                                                             CalculationTaskLinearOptimization],
+                                             generation: int) -> List[dict]:
+        """
+
+        :param ct_table:
+        :param generation:
+        :return:
+        """
+
+        finished_calculation_tasks = self.query_finished_calculation_tasks(ct_table=ct_table,
+                                                                           generation=generation)
 
         return [load_json(calculation.calcoutput_filepath)
-                for calculation in finished_calculationtasks]
+                for calculation in finished_calculation_tasks]
 
     def await_generation_finished(self,
+                                  ct_table: Union[CalculationTaskEvolutionaryOptimization,
+                                                  CalculationTaskLinearOptimization],
                                   optimization_id: uuid4,
                                   generation: int,
-                                  total_population: Optional[int] = None,
-                                  print_progress: bool = False):
-        if not total_population:
-            total_population = self.query_optimizationtask_with_id(optimization_id=optimization_id).total_population
+                                  total_population: Optional[int] = None):
+        """
 
-        if print_progress:
-            pbar = tqdm(total=total_population)
+        :param ct_table:
+        :param optimization_id:
+        :param generation:
+        :param total_population:
+        :return:
+        """
+        if not total_population:
+            total_population = self.query_optimization_task_with_id(optimization_id=optimization_id).total_population
 
         while True:
-            current_population = self.session.query(self.calculation_task).\
-                filter(self.calculation_task.optimization_id == optimization_id,
-                       self.calculation_task.generation == generation,
-                       self.calculation_task.calculation_state == CALCULATION_FINISH).count()
+            current_population = self.session.query(ct_table).\
+                filter(ct_table.optimization_id == optimization_id,
+                       ct_table.generation == generation,
+                       ct_table.calculation_state == CALCULATION_FINISH).count()
 
-            if print_progress:
-                pbar.update(current_population - pbar.n)
+            # print(f"ID: {optimization_id}")
+            # print(f"Generation: {generation}")
+            # print(f"Calculation state: {CALCULATION_FINISH}")
 
-            print(f"Current number of calculated individuals: {current_population}")
+            # print(f"Current number of calculated individuals: {current_population}")
 
             if current_population == total_population:
                 break
 
-        if print_progress:
-            pbar.close()
-
     def create_single_calculation_job(self,
+                                      ct_table,
                                       optimization_id: uuid4,
-                                      generation: int,
                                       individual: List[float],
-                                      individual_id: int) -> None:
+                                      generation: int = None,
+                                      individual_id: int = None) -> None:
+        """
 
-        optimization_task = self.query_optimizationtask_with_id(optimization_id=optimization_id)
+        :param ct_table:
+        :param optimization_id:
+        :param individual:
+        :param generation:
+        :param individual_id:
+        :return:
+        """
+
+        optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
         calculation_parameters = {
             "ind_genes": individual
@@ -153,7 +192,7 @@ class OptimizationManager:
                                                                                    extensions=[CALC_INPUT_EXT,
                                                                                                CALC_OUTPUT_EXT])
 
-        new_calc_task = self.calculation_task(
+        new_calc_task = ct_table(
             author=optimization_task.author,
             project=optimization_task.project,
             optimization_id=optimization_task.optimization_id,
@@ -169,45 +208,65 @@ class OptimizationManager:
         write_json(obj=calculation_parameters,
                    filepath=calcinput_filepath)
 
+        # Todo check functionality of session.commit(seems to be bugged, as second generation tasks weren't pushed to
+        # the database)
         self.session.add(new_calc_task)
         self.session.commit()
 
     def create_new_calculation_jobs(self,
+                                    ct_table: Union[CalculationTaskEvolutionaryOptimization,
+                                                    CalculationTaskLinearOptimization],
                                     optimization_id: uuid4,
                                     generation: int,
                                     population: List[List[float]]):
+        """
+
+        :param ct_table:
+        :param optimization_id:
+        :param generation:
+        :param population:
+        :return:
+        """
         for i, individual in enumerate(population):
-            self.create_single_calculation_job(optimization_id=optimization_id,
+            self.create_single_calculation_job(ct_table=ct_table,
+                                               optimization_id=optimization_id,
                                                generation=generation,
                                                individual=individual,
                                                individual_id=i)
 
     def linear_optimization_queue(self,
+                                  ct_table: Union[CalculationTaskEvolutionaryOptimization,
+                                                  CalculationTaskLinearOptimization],
                                   optimization_id: uuid4,
-                                  individual: List[float],
-                                  print_progress: bool):
-        # generation = "linear_optimization"
-        # individual_id = "1"
+                                  individual: List[float]):
+        """
 
+        :param ct_table:
+        :param optimization_id:
+        :param individual:
+        :return:
+        """
         # Todo create another table for linear optimization
         generation = 0
         individual_id = 0
 
-        self.create_single_calculation_job(optimization_id=optimization_id,
+        self.create_single_calculation_job(ct_table=ct_table,
+                                           optimization_id=optimization_id,
                                            generation=generation,
                                            individual=individual,
                                            individual_id=individual_id)
 
-        self.await_generation_finished(optimization_id=optimization_id,
+        self.await_generation_finished(ct_table=ct_table,
+                                       optimization_id=optimization_id,
                                        generation=generation,
-                                       total_population=individual_id,
-                                       print_progress=print_progress)
+                                       total_population=individual_id)
 
-        solution_dict = self.summarize_finished_calculationtasks(generation=generation)
+        solution_dict = self.summarize_finished_calculation_tasks(ct_table=ct_table,
+                                                                  generation=generation)
 
         solution = tuple(solution_dict["functions"][fun] for fun in solution_dict["functions"])
 
-        optimization_task = self.query_optimizationtask_with_id(optimization_id=optimization_id)
+        optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
         optimization_task.scalar_fitness = scalarize_solution(solution)
         self.session.commit()
@@ -216,19 +275,20 @@ class OptimizationManager:
 
     def remove_optimization_and_calculation_data(self,
                                                  optimization_id: uuid4) -> None:
-        optimization_task = self.query_optimizationtask_with_id(optimization_id=optimization_id)
+        optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
         Path(optimization_task.opt_filepath).unlink()
         Path(optimization_task.data_filepath).unlink()
 
-        calculations = self.session.query(self.calculation_task).all()
+        for ct_table in [self.ct_eo, self.ct_lo]:
+            calculations = self.session.query(ct_table).all()
 
-        calculation_files = [(calculation.calcinputfilepath,  calculation.calcoutput_filepath)
-                             for calculation in calculations]
+            calculation_files = [(calculation.calcinputfilepath,  calculation.calcoutput_filepath)
+                                 for calculation in calculations]
 
-        for calcinput_file, calcoutput_file in calculation_files:
-            Path(calcinput_file).unlink()
-            Path(calcoutput_file).unlink()
+            for calcinput_file, calcoutput_file in calculation_files:
+                Path(calcinput_file).unlink()
+                Path(calcoutput_file).unlink()
 
     def run(self):
         """ Function run is used to keep the manager working constantly. It manages the following tasks:
@@ -242,27 +302,27 @@ class OptimizationManager:
             None - output is managed over databases
 
         """
-        if self.debug:
-            self.debug_manager()
+        # if self.debug:
+        #     self.debug_manager()
 
         while True:
             if self.debug:
                 print("No job. Sleeping for 10 seconds.")
                 sleep(10)
 
-            new_optimization_task = self.query_first_starting_optimizationtask()
+            new_optimization_task = self.query_first_starting_optimization_task()
 
             if new_optimization_task:
                 optimization_id = new_optimization_task.optimization_id
 
-                optimization_task = self.query_optimizationtask_with_id(optimization_id=optimization_id)
+                optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
                 optimization_task.optimization_state = OPTIMIZATION_RUN
                 self.session.commit()
 
                 optimization = load_json(new_optimization_task.opt_filepath)
                 data = load_json(new_optimization_task.data_filepath)
 
-                gatoolbox = self.gatoolbox(
+                ea_toolbox = self.ea_toolbox(
                     eta=optimization["parameters"]["eta"],
                     bounds=data["individual"]["boundaries"],
                     indpb=optimization["parameters"]["indpb"],
@@ -274,42 +334,68 @@ class OptimizationManager:
                 number_of_generations = optimization["parameters"]["ngen"]
                 population_size = optimization["parameters"]["pop_size"]
 
-                population = gatoolbox.make_population(population_size)
+                population = ea_toolbox.make_population(population_size)
 
                 for generation in range(number_of_generations):
-                    optimization_task = self.query_optimizationtask_with_id(optimization_id=optimization_id)
+                    if self.debug:
+                        print(f"Generation: {generation}")
+
+                    optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
                     optimization_task.current_generation = generation
                     optimization_task.current_population = 0
                     self.session.commit()
 
-                    if generation > 1:
-                        individuals = self.summarize_finished_calculationtasks(generation=generation)
+                    if generation > 0:
+                        individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
+                                                                                generation=generation)
+                        if self.debug:
+                            print(f"Individuals summarized.")
 
-                        population = gatoolbox.optimize_evolutionary(individuals=individuals)
+                        population = ea_toolbox.optimize_evolutionary(individuals=individuals)
 
-                    self.create_new_calculation_jobs(optimization_id=optimization_id,
+                        if self.debug:
+                            print(f"Population evoluted.")
+
+                    self.create_new_calculation_jobs(ct_table=self.ct_eo,
+                                                     optimization_id=optimization_id,
                                                      generation=generation,
                                                      population=population)
 
-                    self.await_generation_finished(optimization_id=new_optimization_task.optimization_id,
-                                                   generation=generation,
-                                                   print_progress=self.print_progress)
+                    if self.debug:
+                        print(f"New jobs created.")
 
-                    individuals = self.summarize_finished_calculationtasks(generation=number_of_generations)
+                    self.await_generation_finished(ct_table=self.ct_eo,
+                                                   optimization_id=optimization_id,
+                                                   generation=generation)
 
-                    population = self.gatoolbox.evaluate_finished_calculations(individuals=individuals)
+                    if self.debug:
+                        print(f"Jobs finished.")
 
-                    self.gatoolbox.select_best_individuals(population=population)
+                    individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
+                                                                            generation=generation)
 
-                solution = self.gatoolbox.select_first_of_hall_of_fame()
+                    if self.debug:
+                        print(f"Generation summarized.")
 
-                solution = self.gatoolbox.optimize_linear(solution=solution,
-                                                          function=partial(self.linear_optimization_queue,
-                                                                           optimization_task=new_optimization_task,
-                                                                           print_progress=self.print_progress))
+                    population = ea_toolbox.evaluate_finished_calculations(individuals=individuals)
 
-                optimization_task = self.query_optimizationtask_with_id(optimization_id=optimization_id)
+                    if self.debug:
+                        print(f"Generation evaluated.")
+
+                    population = ea_toolbox.select_best_individuals(population=population)
+
+                    if self.debug:
+                        print(f"Generation selected.")
+
+                solution = ea_toolbox.select_first_of_hall_of_fame()
+
+                solution = ea_toolbox.optimize_linear(solution=solution,
+                                                      function=partial(self.linear_optimization_queue,
+                                                                       ct_table=self.ct_lo,
+                                                                       optimization_id=optimization_id))
+
+                optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
                 optimization_task.solution = {"solution": solution}
                 optimization_task.optimization_state = OPTIMIZATION_FINISH
@@ -321,11 +407,11 @@ class OptimizationManager:
 if __name__ == '__main__':
     optimization_manager = OptimizationManager(
         session=Session,
-        gatoolbox=GAToolbox,
+        ea_toolbox=EAToolbox,
         optimization_task=OptimizationTask,
-        calculation_task=CalculationTask,
-        debug=False,
-        print_progress=False
+        calculation_task_evolutionary_optimization=CalculationTaskEvolutionaryOptimization,
+        calculation_task_linear_optimization=CalculationTaskLinearOptimization,
+        debug=True
     )
 
     optimization_manager.run()

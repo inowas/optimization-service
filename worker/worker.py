@@ -6,7 +6,7 @@ from sympy import lambdify, Symbol
 
 from helper_functions import load_json, write_json
 from db import Session
-from models import CalculationTask, OptimizationTask
+from models import CalculationTaskEvolutionaryOptimization, CalculationTaskLinearOptimization, OptimizationTask
 from config import CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH
 from x_helper import g_mod
 
@@ -19,43 +19,53 @@ class WorkerManager:
     def __init__(self,
                  session,
                  optimization_task,
-                 calculation_task):
+                 calculation_task_evolutionary_optimization,
+                 calculation_task_linear_optimization):
         self.session = session
-        self.optimization_task = optimization_task
-        self.calculation_task = calculation_task
+        self.ot = optimization_task
+        self.ct_eo = calculation_task_evolutionary_optimization
+        self.ct_lo = calculation_task_linear_optimization
 
-    def query_first_starting_calculationtask(self) -> Session.query:
+    def query_first_starting_calculation_task(self) -> Session.query:
         """
 
         Returns:
             query - first optimization task in list
 
         """
-        return self.session.query(self.calculation_task)\
-            .filter(self.calculation_task.calculation_state == CALCULATION_START).first()
+        calculation_task = self.session.query(self.ct_eo)\
+            .filter(self.ct_eo.calculation_state == CALCULATION_START).first()
 
-    def query_calculationtask_with_id(self,
-                                      calculation_id) -> Session.query:
+        if not calculation_task:
+            return self.ct_lo, self.session.query(self.ct_lo) \
+                .filter(self.ct_lo.calculation_state == CALCULATION_START).first()
 
-        return self.session.query(self.calculation_task).\
-            filter(self.calculation_task.calculation_id == calculation_id).first()
+        return self.ct_eo, calculation_task
 
-    def query_optimizationtask_with_id(self,
-                                       optimization_id) -> Session.query:
+    def query_calculation_task_with_id(self,
+                                       ct_table,
+                                       calculation_id) -> Session.query:
 
-        return self.session.query(self.optimization_task).\
-            filter(self.optimization_task.optimization_id == optimization_id).first()
+        return self.session.query(ct_table).\
+            filter(ct_table.calculation_id == calculation_id).first()
+
+    def query_optimization_task_with_id(self,
+                                        optimization_id) -> Session.query:
+
+        return self.session.query(self.ot).\
+            filter(self.ot.optimization_id == optimization_id).first()
 
     def run(self):
         while True:
-            new_calculation_task = self.query_first_starting_calculationtask()
+            ct_table, new_calculation_task = self.query_first_starting_calculation_task()
 
             if new_calculation_task:
                 calculation_id = new_calculation_task.calculation_id
 
-                calculationtask = self.query_calculationtask_with_id(calculation_id=calculation_id)
-                print(f"Working on task with id: {calculationtask.calculation_id}")
-                calculationtask.calculation_state = CALCULATION_RUN
+                calculation_task = self.query_calculation_task_with_id(ct_table=ct_table,
+                                                                       calculation_id=calculation_id)
+                print(f"Working on task with id: {calculation_id}")
+                calculation_task.calculation_state = CALCULATION_RUN
                 self.session.commit()
 
                 data_input = load_json(new_calculation_task.data_filepath)
@@ -79,9 +89,10 @@ class WorkerManager:
 
                 print("Wrote json.")
 
-                calculation_task = self.query_calculationtask_with_id(calculation_id=calculation_id)
+                calculation_task = self.query_calculation_task_with_id(ct_table=ct_table,
+                                                                       calculation_id=calculation_id)
                 calculation_task.calculation_state = CALCULATION_FINISH
-                optimization_task = self.query_optimizationtask_with_id(
+                optimization_task = self.query_optimization_task_with_id(
                     optimization_id=calculation_task.optimization_id)
                 optimization_task.current_population += 1
                 self.session.commit()
@@ -93,7 +104,8 @@ if __name__ == '__main__':
     worker_manager = WorkerManager(
         session=Session,
         optimization_task=OptimizationTask,
-        calculation_task=CalculationTask
+        calculation_task_evolutionary_optimization=CalculationTaskEvolutionaryOptimization,
+        calculation_task_linear_optimization=CalculationTaskLinearOptimization
     )
 
     worker_manager.run()
