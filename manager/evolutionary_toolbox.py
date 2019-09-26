@@ -206,7 +206,7 @@ class EAToolbox:
             solution: a linear optimized solution
 
         """
-        solver = NelderMeadSimplexSolver(dim=len(self.weights))
+        solver = NelderMeadSimplexSolver(dim=len(solution))
 
         solver.SetInitialPoints(x0=solution)
 

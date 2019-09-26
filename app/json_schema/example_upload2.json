@@ -5,7 +5,7 @@
   "optimization_state": "optimization_start",
   "optimization": {
     "parameters": {
-      "ngen": 250,
+      "ngen": 10,
       "pop_size": 100,
       "mutpb": 0.1,
       "cxpb": 0.9,

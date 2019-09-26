@@ -64,7 +64,7 @@ class WorkerManager:
 
                 calculation_task = self.query_calculation_task_with_id(ct_table=ct_table,
                                                                        calculation_id=calculation_id)
-                print(f"Working on task with id: {calculation_id}")
+                # print(f"Working on task with id: {calculation_id}")
                 calculation_task.calculation_state = CALCULATION_RUN
                 self.session.commit()
 
@@ -87,17 +87,18 @@ class WorkerManager:
                 write_json(obj=data_output,
                            filepath=new_calculation_task.calcoutput_filepath)
 
-                print("Wrote json.")
+                # print("Wrote json.")
 
                 calculation_task = self.query_calculation_task_with_id(ct_table=ct_table,
                                                                        calculation_id=calculation_id)
                 calculation_task.calculation_state = CALCULATION_FINISH
-                optimization_task = self.query_optimization_task_with_id(
-                    optimization_id=calculation_task.optimization_id)
-                optimization_task.current_population += 1
+                if ct_table == self.ct_eo:
+                    optimization_task = self.query_optimization_task_with_id(
+                        optimization_id=calculation_task.optimization_id)
+                    optimization_task.current_population += 1
                 self.session.commit()
 
-                print("Session committed.")
+                # print("Session committed.")
 
 
 if __name__ == '__main__':

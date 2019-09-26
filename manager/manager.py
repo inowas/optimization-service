@@ -2,19 +2,13 @@ import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
-import json
 from pathlib import Path
-import numpy as np
-from copy import deepcopy
-from functools import partial
+from functools import partialmethod
 from uuid import uuid4
 from typing import Dict, Union, Tuple, List, Optional
-from tqdm import tqdm
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from evolutionary_toolbox import EAToolbox
-# The following imports come from our flask app
-# We want to use the same database and we need the same models for our query
 from db import Session
 from models import OptimizationTask, CalculationTaskEvolutionaryOptimization, CalculationTaskLinearOptimization
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
@@ -208,10 +202,14 @@ class OptimizationManager:
         write_json(obj=calculation_parameters,
                    filepath=calcinput_filepath)
 
+        # print(f"Generation {generation}: Wrote job json.")
+
         # Todo check functionality of session.commit(seems to be bugged, as second generation tasks weren't pushed to
         # the database)
         self.session.add(new_calc_task)
         self.session.commit()
+
+        # print(f"Generation {generation}: Job commited to database.")
 
     def create_new_calculation_jobs(self,
                                     ct_table: Union[CalculationTaskEvolutionaryOptimization,
@@ -235,8 +233,8 @@ class OptimizationManager:
                                                individual_id=i)
 
     def linear_optimization_queue(self,
-                                  ct_table: Union[CalculationTaskEvolutionaryOptimization,
-                                                  CalculationTaskLinearOptimization],
+                                  # ct_table: Union[CalculationTaskEvolutionaryOptimization,
+                                  #                 CalculationTaskLinearOptimization],
                                   optimization_id: uuid4,
                                   individual: List[float]):
         """
@@ -249,6 +247,10 @@ class OptimizationManager:
         # Todo create another table for linear optimization
         generation = 0
         individual_id = 0
+        total_population = 1
+        ct_table = self.ct_lo
+
+        individual = list(individual)  # Hotfix for mystic solver, that converts our solution to a numpy array
 
         self.create_single_calculation_job(ct_table=ct_table,
                                            optimization_id=optimization_id,
@@ -259,12 +261,14 @@ class OptimizationManager:
         self.await_generation_finished(ct_table=ct_table,
                                        optimization_id=optimization_id,
                                        generation=generation,
-                                       total_population=individual_id)
+                                       total_population=total_population)
 
         solution_dict = self.summarize_finished_calculation_tasks(ct_table=ct_table,
-                                                                  generation=generation)
+                                                                  generation=generation)[0]
 
-        solution = tuple(solution_dict["functions"][fun] for fun in solution_dict["functions"])
+        solution = [solution_dict["functions"][fun] for fun in solution_dict["functions"]]
+
+        print(solution)
 
         optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
@@ -342,13 +346,13 @@ class OptimizationManager:
 
                     optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
-                    optimization_task.current_generation = generation
+                    optimization_task.current_generation = generation + 1  # Table counts to ten
                     optimization_task.current_population = 0
                     self.session.commit()
 
                     if generation > 0:
                         individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
-                                                                                generation=generation)
+                                                                                generation=(generation-1))
                         if self.debug:
                             print(f"Individuals summarized.")
 
@@ -390,10 +394,18 @@ class OptimizationManager:
 
                 solution = ea_toolbox.select_first_of_hall_of_fame()
 
+                # print(solution)
+
+                def custom_linear_optimization_queue(individual):
+                    return self.linear_optimization_queue(optimization_id,
+                                                          individual)
+
                 solution = ea_toolbox.optimize_linear(solution=solution,
-                                                      function=partial(self.linear_optimization_queue,
-                                                                       ct_table=self.ct_lo,
-                                                                       optimization_id=optimization_id))
+                                                      function=custom_linear_optimization_queue)
+
+                if self.debug:
+                    print("Solution linear optimized.")
+                    print(f"Solution: {solution}")
 
                 optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
