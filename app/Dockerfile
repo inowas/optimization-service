@@ -12,5 +12,4 @@ RUN pip install numpy==1.12.0
 # Install the requirements
 RUN pip install -r ./requirements.txt
 
-CMD [pytest, /tests]
 CMD ["python", "app.py"]

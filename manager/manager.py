@@ -3,14 +3,14 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
 from pathlib import Path
-from functools import partialmethod
 from uuid import uuid4
 from typing import Dict, Union, Tuple, List, Optional
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from evolutionary_toolbox import EAToolbox
-from db import Session
-from models import OptimizationTask, CalculationTaskEvolutionaryOptimization, CalculationTaskLinearOptimization
+from db import Session, engine
+from models import Base, OptimizationTask, CalculationTaskEvolutionaryOptimization, CalculationTaskLinearOptimization, \
+    OptimizationProgress
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
     CALCULATION_FINISH, OPTIMIZATION_FINISH
 
@@ -323,6 +323,10 @@ class OptimizationManager:
                 optimization_task.optimization_state = OPTIMIZATION_RUN
                 self.session.commit()
 
+                Base.metadata.create_all(bind=engine,
+                                         tables=[OptimizationProgress.__table__],
+                                         checkfirst=True)
+
                 optimization = load_json(new_optimization_task.opt_filepath)
                 data = load_json(new_optimization_task.data_filepath)
 
@@ -389,6 +393,17 @@ class OptimizationManager:
 
                     population = ea_toolbox.select_best_individuals(population=population)
 
+                    optimization_progress = OptimizationProgress(
+                        author=optimization_task.author,
+                        project=optimization_task.project,
+                        optimization_id=optimization_id,
+                        generation=generation,
+                        scalar_fitness=scalarize_solution(ea_toolbox.select_first_of_hall_of_fame().fitness.values)
+                    )
+
+                    self.session.add(optimization_progress)
+                    self.session.commit()
+
                     if self.debug:
                         print(f"Generation selected.")
 
@@ -413,7 +428,16 @@ class OptimizationManager:
                 optimization_task.optimization_state = OPTIMIZATION_FINISH
                 self.session.commit()
 
+                Base.metadata.drop_all(bind=engine,
+                                       tables=[OptimizationProgress.__table__],
+                                       checkfirst=True)
+
                 self.remove_optimization_and_calculation_data(optimization_id=optimization_id)
+
+                continue
+
+            print("No jobs. Sleeping for 1 minute.")
+            sleep(60)
 
 
 if __name__ == '__main__':

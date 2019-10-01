@@ -100,6 +100,11 @@ class WorkerManager:
 
                 # print("Session committed.")
 
+                continue
+
+            print("No jobs. Sleeping for 30 seconds.")
+            sleep(30)
+
 
 if __name__ == '__main__':
     worker_manager = WorkerManager(

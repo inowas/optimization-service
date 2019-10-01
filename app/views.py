@@ -1,15 +1,17 @@
 from flask import Blueprint
-from flask import request, render_template, jsonify
+from flask import request, render_template, jsonify, redirect, abort
 from flask_cors import cross_origin
 import json
 from jsonschema import validate, ValidationError, SchemaError
 from pathlib import Path
+import pandas as pd
+import matplotlib.pyplot as plt
+# from IPython.display import HTML
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from db import Session
-from models import OptimizationTask
-from config import OPT_EXT, DATA_EXT
-from config import JSON_SCHEMA_UPLOAD
+from models import OptimizationTask, OptimizationProgress
+from config import OPT_EXT, DATA_EXT, JSON_SCHEMA_UPLOAD, OPTIMIZATION_RUN
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -52,7 +54,7 @@ def upload_file() -> jsonify:
         author = req_data.get("author", "Max Mustermann")
         project = req_data.get("project", "Standardprojekt")
         optimization_id = req_data["optimization_id"]
-        optimization_state = req_data["optimization_state"]
+        optimization_state = req_data["type"]
         optimization = req_data["optimization"]
         population_size = optimization["parameters"]["pop_size"]
         total_generation = optimization["parameters"]["ngen"]
@@ -96,7 +98,9 @@ def upload_file() -> jsonify:
 
             Session.rollback()
 
-        return jsonify(req_data)
+            # return render_html() creation error
+
+        return redirect(f"/optimization/{optimization_id}")  # jsonify(req_data)
 
     if request.method == 'GET':
         if request.content_type == "application/json":
@@ -106,8 +110,50 @@ def upload_file() -> jsonify:
         return render_template('upload.html')
 
 
-# Our optimization page where we can see the progress of running optimizations
+# Optimization page with progress of running optimizations
 @optimization_blueprint.route("/optimization", methods=["GET"])
 @cross_origin()
-def show_optimization():
+def show_all_optimizations():
+    if request.method == 'GET':
+        optimization_tasks = Session.query(OptimizationTask).statement
+
+        optimization_tasks_df = pd.read_sql(optimization_tasks, Session.bind)
+
+        optimization_tasks_df = optimization_tasks_df.drop(["opt_filepath", "data_filepath"], axis=1)
+
+        return optimization_tasks_df.to_html()  # classes="table table-striped table-hover"
+
+
+# Optimization page with progress of running optimizations
+@optimization_blueprint.route("/optimization/<optimization_id_>", methods=["GET"])
+@cross_origin()
+def show_single_optimization_progress(optimization_id_):
+    if request.method == 'GET':
+
+        optimization_task = Session.query(OptimizationTask).\
+            filter(OptimizationTask.optimization_id == optimization_id_).first()
+
+        if optimization_task:
+            if optimization_task.optimization_state == OPTIMIZATION_RUN:
+                optimization_progress = Session.query(OptimizationProgress).\
+                    filter(OptimizationProgress == optimization_id_)
+
+                if optimization_progress.all():
+                    optimization_progress_df = pd.read_sql(optimization_progress.statement, Session.bind)
+                    optimization_progress_df = optimization_progress_df.loc[
+                        optimization_progress_df.generation <= optimization_task.total_generation]
+
+                    full_df = pd.DataFrame({"generation": range(1, optimization_task.total_generation + 1)})
+
+                    optimization_progress_df = pd.merge(full_df, optimization_progress_df, how="left")
+
+                    plt.figure()
+                    optimization_progress_df.plot(x="generation", y="scalar_fitness")
+                    plt.title(f"Optimization ID: {optimization_id_}"
+                              f"Generation: {optimization_task.current_generation}/{optimization_task.total_generation}")
+
+                    return plt
+
+        return abort(404)
+
     pass

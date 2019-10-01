@@ -37,9 +37,28 @@ class OptimizationTask(Base):
         self.current_generation = 0
         self.total_generation = total_generation
         self.solution = solution
-        self.fitness = INITIAL_SCALAR_FITNESS
+        self.scalar_fitness = INITIAL_SCALAR_FITNESS
         self.opt_filepath = opt_filepath
         self.data_filepath = data_filepath
+
+
+class OptimizationProgress(Base):
+    __tablename__ = "optimization_progress"
+
+    author = Column(String)
+    project = Column(String)
+    optimization_id = Column(String, primary_key=True)
+    generation = Column(Integer)
+    scalar_fitness = Column(Float)
+
+    def __init__(self, author, project, optimization_id, generation, scalar_fitness, **args):
+        super().__init__(**args)
+
+        self.author = author
+        self.project = project
+        self.optimization_id = optimization_id
+        self.generation = generation
+        self.scalar_fitness = scalar_fitness
 
 
 class CalculationTaskEvolutionaryOptimization(Base):
