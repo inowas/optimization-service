@@ -47,8 +47,8 @@ class OptimizationProgress(Base):
 
     author = Column(String)
     project = Column(String)
-    optimization_id = Column(String, primary_key=True)
-    generation = Column(Integer)
+    optimization_id = Column(String)
+    generation = Column(Integer, primary_key=True)
     scalar_fitness = Column(Float)
 
     def __init__(self, author, project, optimization_id, generation, scalar_fitness, **args):

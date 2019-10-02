@@ -22,6 +22,11 @@
           "description": "Optimization parameters holding information concerning the GA",
           "type": "object",
           "properties": {
+            "method": {
+              "description": "Type of optimization; either EO (evolutionary optimization) or LO (linear optimization).",
+              "type": "string",
+              "enum": ["EO", "LO"]
+            },
             "ngen": {
               "description": "Number of generations of GA",
               "type": "integer"
@@ -53,7 +58,7 @@
               "maximum": 1
             }
           },
-          "required": ["ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb"],
+          "required": ["method","ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb"],
           "additionalProperties": false
         }
       }
@@ -81,11 +86,6 @@
         "individual": {
           "type": "object",
           "properties": {
-            "genes": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 15
-            },
             "boundaries": {
               "type": "array",
               "items": {
@@ -95,7 +95,9 @@
                 },
                 "minItems": 2,
                 "maxItems": 2
-              }
+              },
+              "minItems": 1,
+              "maxItems": 15
             }
           }
         }

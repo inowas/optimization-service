@@ -295,19 +295,15 @@ class OptimizationManager:
                 Path(calcoutput_file).unlink()
 
     def run(self):
-        """ Function run is used to keep the manager working constantly. It manages the following tasks:
-        # What are the priorities for the optimization manager?
-        # 1. Check if any optimization is finished and send out response.
-        # 2. Check if any population calculation is finished and sum it up to generate a new population.
-        # 3. Generate a new/starting population.
-        # 4. Generate new calculation jobs.
+        """ Function run is used to keep the manager working constantly. It will work on one optimization only and
+        fulfill the job which includes constantly creating jobs for one generation, then after calculation
+        summarizing the results and creating new generations with new jobs and finally put the solution back in the
+        table and set the optimization to be finished.
 
         Returns:
             None - output is managed over databases
 
         """
-        # if self.debug:
-        #     self.debug_manager()
 
         while True:
             if self.debug:
@@ -397,7 +393,7 @@ class OptimizationManager:
                         author=optimization_task.author,
                         project=optimization_task.project,
                         optimization_id=optimization_id,
-                        generation=generation,
+                        generation=(generation+1),
                         scalar_fitness=scalarize_solution(ea_toolbox.select_first_of_hall_of_fame().fitness.values)
                     )
 
@@ -405,7 +401,7 @@ class OptimizationManager:
                     self.session.commit()
 
                     if self.debug:
-                        print(f"Generation selected.")
+                        print("Generation selected.")
 
                 solution = ea_toolbox.select_first_of_hall_of_fame()
 
@@ -441,6 +437,8 @@ class OptimizationManager:
 
 
 if __name__ == '__main__':
+    sleep(10)
+
     optimization_manager = OptimizationManager(
         session=Session,
         ea_toolbox=EAToolbox,

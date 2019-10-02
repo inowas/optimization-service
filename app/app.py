@@ -4,7 +4,10 @@ from views import optimization_blueprint
 from config import DATABASE_URL
 from models import Base, OptimizationTask, CalculationTaskEvolutionaryOptimization, CalculationTaskLinearOptimization
 from db import engine
+from time import sleep
 # https://www.compose.com/articles/using-postgresql-through-sqlalchemy/
+
+sleep(10)
 
 
 # Create a flask app
@@ -18,14 +21,12 @@ app.register_blueprint(optimization_blueprint)
 
 CORS(app)
 
-# OptimizationTask.__table__.create(engine)
-# CalculationTaskEvolutionaryOptimization.__table__.create(engine)
-# CalculationTaskLinearOptimization.__table__.create(engine)
+tables = [OptimizationTask.__table__,
+          CalculationTaskEvolutionaryOptimization.__table__,
+          CalculationTaskLinearOptimization.__table__]
 
 Base.metadata.create_all(bind=engine,
-                         tables=[OptimizationTask.__table__,
-                                 CalculationTaskEvolutionaryOptimization.__table__,
-                                 CalculationTaskLinearOptimization.__table__],
+                         tables=tables,
                          checkfirst=True)
 
 if __name__ == "__main__":

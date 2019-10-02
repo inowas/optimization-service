@@ -107,6 +107,8 @@ class WorkerManager:
 
 
 if __name__ == '__main__':
+    sleep(10)
+
     worker_manager = WorkerManager(
         session=Session,
         optimization_task=OptimizationTask,

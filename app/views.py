@@ -1,11 +1,14 @@
 from flask import Blueprint
 from flask import request, render_template, jsonify, redirect, abort
+from flask import Response
 from flask_cors import cross_origin
 import json
 from jsonschema import validate, ValidationError, SchemaError
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+from io import BytesIO
+# from IPython.display import HTML
 # from IPython.display import HTML
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
@@ -24,10 +27,8 @@ def upload_file() -> jsonify:
         # https://stackoverflow.com/questions/46136478/flask-upload-how-to-get-file-name
         # See if there's a file in our selection field
         if not request.files.get('file', None):
-            error = "No file selected!"
-            return render_template('upload.html', error=error)
+            return render_template('upload.html', error="No file selected!")
 
-        # No load from file, that's why no open!
         file_upload = request.files["file"]
         req_data = json.load(file_upload)
 
@@ -47,30 +48,27 @@ def upload_file() -> jsonify:
             return render_template('upload.html', error=error)
 
         except SchemaError as e:
-            error = str(e)
-
-            return render_template('upload.html', error=error)
+            return render_template('upload.html', error=str(e))
 
         author = req_data.get("author", "Max Mustermann")
         project = req_data.get("project", "Standardprojekt")
         optimization_id = req_data["optimization_id"]
         optimization_state = req_data["type"]
         optimization = req_data["optimization"]
+        method = optimization["parameters"]["method"]
         population_size = optimization["parameters"]["pop_size"]
         total_generation = optimization["parameters"]["ngen"]
-        # data is also necessary and can be retrieved directly; data will be written as file, as it's a big chunk
-        # of data and can easily be stored/loaded as json
+
         data = req_data["data"]
 
-        # Where to store the optimization/data
         opt_filepath, data_filepath = create_input_and_output_filepath(task_id=optimization_id,
                                                                        extensions=[OPT_EXT, DATA_EXT])
 
-        # Create instance of task
         optimizationtask = OptimizationTask(
                                 author=author,
                                 project=project,
                                 optimization_id=optimization_id,
+                                optimization_type=method,
                                 optimization_state=optimization_state,  # Input: "optimization_start"
                                 total_population=population_size,
                                 total_generation=total_generation,
@@ -78,8 +76,6 @@ def upload_file() -> jsonify:
                                 opt_filepath=opt_filepath,
                                 data_filepath=data_filepath
                             )
-
-        # Todo Check if optimization id exists in table and decide what to do if so
 
         try:
             write_json(obj=optimization,
@@ -98,9 +94,9 @@ def upload_file() -> jsonify:
 
             Session.rollback()
 
-            # return render_html() creation error
+            return abort(400, "Error: task couldn't be created!")
 
-        return redirect(f"/optimization/{optimization_id}")  # jsonify(req_data)
+        return redirect(f"/optimization/{optimization_id}")
 
     if request.method == 'GET':
         if request.content_type == "application/json":
@@ -121,7 +117,7 @@ def show_all_optimizations():
 
         optimization_tasks_df = optimization_tasks_df.drop(["opt_filepath", "data_filepath"], axis=1)
 
-        return optimization_tasks_df.to_html()  # classes="table table-striped table-hover"
+        return optimization_tasks_df.to_html()
 
 
 # Optimization page with progress of running optimizations
@@ -136,24 +132,34 @@ def show_single_optimization_progress(optimization_id_):
         if optimization_task:
             if optimization_task.optimization_state == OPTIMIZATION_RUN:
                 optimization_progress = Session.query(OptimizationProgress).\
-                    filter(OptimizationProgress == optimization_id_)
+                    filter(OptimizationProgress.optimization_id == optimization_id_)
 
-                if optimization_progress.all():
+                if optimization_progress.first():
                     optimization_progress_df = pd.read_sql(optimization_progress.statement, Session.bind)
                     optimization_progress_df = optimization_progress_df.loc[
-                        optimization_progress_df.generation <= optimization_task.total_generation]
+                        optimization_progress_df.generation <= (optimization_task.current_generation-1)]
 
-                    full_df = pd.DataFrame({"generation": range(1, optimization_task.total_generation + 1)})
+                    df_with_all_generations = pd.DataFrame(
+                        {"generation": range(1, optimization_task.total_generation + 1)})
 
-                    optimization_progress_df = pd.merge(full_df, optimization_progress_df, how="left")
+                    optimization_progress_df = pd.merge(df_with_all_generations,
+                                                        optimization_progress_df,
+                                                        how="left")
+
+                    output = BytesIO()
 
                     plt.figure()
                     optimization_progress_df.plot(x="generation", y="scalar_fitness")
-                    plt.title(f"Optimization ID: {optimization_id_}"
-                              f"Generation: {optimization_task.current_generation}/{optimization_task.total_generation}")
+                    plt.title(f"Optimization ID: {optimization_id_}\n"
+                              f"Generation: {(optimization_task.current_generation-1)}/"
+                              f"{optimization_task.total_generation}")
 
-                    return plt
+                    plt.savefig(output, format='png')
 
-        return abort(404)
+                    return Response(output.getvalue(), mimetype='image/png')
+
+            return abort(404, f"Optimization with id {optimization_id_} isn't running. Progress graph not available!")
+
+        return abort(404, f"Optimization with id {optimization_id_} doesn't exist.")
 
     pass
