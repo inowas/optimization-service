@@ -1,6 +1,7 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Integer, Float, PickleType
+from sqlalchemy import Column, String, Integer, Float, Date, ARRAY
 from sqlalchemy.dialects.postgresql import UUID
+import datetime
 from config import INITIAL_SCALAR_FITNESS
 
 
@@ -13,6 +14,7 @@ class OptimizationTask(Base):
 
     author = Column(String)
     project = Column(String)
+    date = Column(Date)
     optimization_id = Column(String, primary_key=True)
     optimization_type = Column(String)
     optimization_state = Column(String)
@@ -20,7 +22,7 @@ class OptimizationTask(Base):
     total_population = Column(Integer)
     current_generation = Column(Integer)
     total_generation = Column(Integer)
-    solution = Column(PickleType)
+    solution = Column(ARRAY)
     scalar_fitness = Column(Float)
     opt_filepath = Column(String)
     data_filepath = Column(String)
@@ -31,6 +33,7 @@ class OptimizationTask(Base):
 
         self.author = author
         self.project = project
+        self.date = datetime.datetime.now().date()
         self.optimization_id = optimization_id
         self.optimization_type = optimization_type
         self.optimization_state = optimization_state
@@ -44,7 +47,7 @@ class OptimizationTask(Base):
         self.data_filepath = data_filepath
 
 
-class OptimizationProgress(Base):
+class OptimizationHistory(Base):
     __tablename__ = "optimization_progress"
 
     author = Column(String)

@@ -21,9 +21,7 @@ app.register_blueprint(optimization_blueprint)
 
 CORS(app)
 
-tables = [OptimizationTask.__table__,
-          CalculationTaskEvolutionaryOptimization.__table__,
-          CalculationTaskLinearOptimization.__table__]
+tables = [OptimizationTask.__table__]
 
 Base.metadata.create_all(bind=engine,
                          tables=tables,

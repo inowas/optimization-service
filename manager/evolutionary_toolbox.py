@@ -39,7 +39,6 @@ class EAToolbox:
         self.default_individual = None
         self.toolbox = None
 
-
         # Create our default individual which is used by our toolbox
         self.build_default_individual()
         # Create our ga toolbox which is used for further ga optimization
@@ -159,7 +158,7 @@ class EAToolbox:
         return population
 
     def select_nth_of_hall_of_fame(self,
-                                   nth):
+                                   nth: int):
         """ Function wrapper to return the first of equally optimal solutions of the paretofront-halloffame
 
         Returns:
@@ -193,8 +192,8 @@ class EAToolbox:
 
         return population
 
-    def optimize_linear(self,
-                        solution: List[float],
+    @staticmethod
+    def optimize_linear(solution: List[float],
                         function) -> List[float]:
         """ Function to optimize one solution linear by using the mystic library
 
@@ -215,4 +214,4 @@ class EAToolbox:
 
         solver.Solve(function)
 
-        return solver.Solution()
+        return list(solver.Solution())

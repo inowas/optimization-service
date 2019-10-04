@@ -5,12 +5,10 @@ from time import sleep
 from pathlib import Path
 from uuid import uuid4
 from typing import Dict, Union, Tuple, List, Optional
-
-from helper_functions import create_input_and_output_filepath, load_json, write_json
+from helper_functions import create_input_and_output_filepath, load_json, write_json, get_table_for_optimization_id
 from evolutionary_toolbox import EAToolbox
 from db import Session, engine
-from models import Base, OptimizationTask, CalculationTaskEvolutionaryOptimization, CalculationTaskLinearOptimization, \
-    OptimizationProgress
+from models import Base, OptimizationTask, CalculationTask, OptimizationHistory
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
     CALCULATION_FINISH, OPTIMIZATION_FINISH
 
@@ -24,16 +22,17 @@ class OptimizationManager:
                  session,
                  ea_toolbox,
                  optimization_task,
-                 calculation_task_evolutionary_optimization,
-                 calculation_task_linear_optimization,
+                 # calculation_task_evolutionary_optimization,
+                 # calculation_task_linear_optimization,
                  debug: bool = False,
                  print_progress: bool = False):
         self.session = session
         self.ea_toolbox = ea_toolbox
 
         self.ot = optimization_task
-        self.ct_eo = calculation_task_evolutionary_optimization
-        self.ct_lo = calculation_task_linear_optimization
+        # self.ct = None
+        # self.ct_eo = calculation_task_evolutionary_optimization
+        # self.ct_lo = calculation_task_linear_optimization
 
         self.debug = debug
         self.debug_counter = 0
@@ -95,8 +94,7 @@ class OptimizationManager:
             filter(self.ot.optimization_id == optimization_id).first()
 
     def query_finished_calculation_tasks(self,
-                                         ct_table: Union[CalculationTaskEvolutionaryOptimization,
-                                                         CalculationTaskLinearOptimization],
+                                         ct_table: CalculationTask,
                                          generation: int) -> Session.query:
         """
 
@@ -110,8 +108,7 @@ class OptimizationManager:
                    ct_table.calculation_state == CALCULATION_FINISH).all()
 
     def summarize_finished_calculation_tasks(self,
-                                             ct_table: Union[CalculationTaskEvolutionaryOptimization,
-                                                             CalculationTaskLinearOptimization],
+                                             ct_table: CalculationTask,
                                              generation: int) -> List[dict]:
         """
 
@@ -127,8 +124,7 @@ class OptimizationManager:
                 for calculation in finished_calculation_tasks]
 
     def await_generation_finished(self,
-                                  ct_table: Union[CalculationTaskEvolutionaryOptimization,
-                                                  CalculationTaskLinearOptimization],
+                                  ct_table: CalculationTask,
                                   optimization_id: uuid4,
                                   generation: int,
                                   total_population: Optional[int] = None):
@@ -212,8 +208,7 @@ class OptimizationManager:
         # print(f"Generation {generation}: Job commited to database.")
 
     def create_new_calculation_jobs(self,
-                                    ct_table: Union[CalculationTaskEvolutionaryOptimization,
-                                                    CalculationTaskLinearOptimization],
+                                    ct_table: CalculationTask,
                                     optimization_id: uuid4,
                                     generation: int,
                                     population: List[List[float]]):
@@ -233,8 +228,7 @@ class OptimizationManager:
                                                individual_id=i)
 
     def linear_optimization_queue(self,
-                                  # ct_table: Union[CalculationTaskEvolutionaryOptimization,
-                                  #                 CalculationTaskLinearOptimization],
+                                  ct_table,
                                   optimization_id: uuid4,
                                   individual: List[float]):
         """
@@ -244,11 +238,16 @@ class OptimizationManager:
         :param individual:
         :return:
         """
-        # Todo create another table for linear optimization
-        generation = 0
+
+        calculation_task = self.session.query(ct_table).last()
+
+        if calculation_task:
+            generation = calculation_task.generation + 1
+        else:
+            generation = 1
+
         individual_id = 0
         total_population = 1
-        ct_table = self.ct_lo
 
         individual = list(individual)  # Hotfix for mystic solver, that converts our solution to a numpy array
 
@@ -284,20 +283,23 @@ class OptimizationManager:
         Path(optimization_task.opt_filepath).unlink()
         Path(optimization_task.data_filepath).unlink()
 
-        for ct_table in [self.ct_eo, self.ct_lo]:
-            calculations = self.session.query(ct_table).all()
+        ct_table = get_table_for_optimization_id(CalculationTask, optimization_id)
 
-            calculation_files = [(calculation.calcinputfilepath,  calculation.calcoutput_filepath)
-                                 for calculation in calculations]
+        calculations = self.session.query(ct_table).all()
 
-            for calcinput_file, calcoutput_file in calculation_files:
-                Path(calcinput_file).unlink()
-                Path(calcoutput_file).unlink()
+        calculation_files = [(calculation.calcinputfilepath,  calculation.calcoutput_filepath)
+                             for calculation in calculations]
+
+        for calcinput_file, calcoutput_file in calculation_files:
+            Path(calcinput_file).unlink()
+            Path(calcoutput_file).unlink()
 
     def manage_evolutionary_optimization(self,
                                          optimization_id,
                                          optimization,
-                                         ea_toolbox):
+                                         ea_toolbox,
+                                         ct_table,
+                                         oh_table):
         number_of_generations = optimization["parameters"]["ngen"]
         population_size = optimization["parameters"]["pop_size"]
 
@@ -314,7 +316,7 @@ class OptimizationManager:
             self.session.commit()
 
             if generation > 0:
-                individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
+                individuals = self.summarize_finished_calculation_tasks(ct_table=ct_table,
                                                                         generation=(generation - 1))
                 if self.debug:
                     print(f"Individuals summarized.")
@@ -324,7 +326,7 @@ class OptimizationManager:
                 if self.debug:
                     print(f"Population evoluted.")
 
-            self.create_new_calculation_jobs(ct_table=self.ct_eo,
+            self.create_new_calculation_jobs(ct_table=ct_table,
                                              optimization_id=optimization_id,
                                              generation=generation,
                                              population=population)
@@ -332,14 +334,14 @@ class OptimizationManager:
             if self.debug:
                 print(f"New jobs created.")
 
-            self.await_generation_finished(ct_table=self.ct_eo,
+            self.await_generation_finished(ct_table=ct_table,
                                            optimization_id=optimization_id,
                                            generation=generation)
 
             if self.debug:
                 print(f"Jobs finished.")
 
-            individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
+            individuals = self.summarize_finished_calculation_tasks(ct_table=ct_table,
                                                                     generation=generation)
 
             if self.debug:
@@ -352,7 +354,7 @@ class OptimizationManager:
 
             population = ea_toolbox.select_best_individuals(population=population)
 
-            optimization_progress = OptimizationProgress(
+            optimization_history = oh_table(
                 author=optimization_task.author,
                 project=optimization_task.project,
                 optimization_id=optimization_id,
@@ -360,7 +362,7 @@ class OptimizationManager:
                 scalar_fitness=scalarize_solution(ea_toolbox.select_first_of_hall_of_fame().fitness.values)
             )
 
-            self.session.add(optimization_progress)
+            self.session.add(optimization_history)
             self.session.commit()
 
             if self.debug:
@@ -388,14 +390,18 @@ class OptimizationManager:
     def manage_any_optimization(self,
                                 optimization_id,
                                 optimization,
-                                ea_toolbox):
+                                ea_toolbox,
+                                ct_table,
+                                oh_table):
         optimization_task = self.session.query(self.ot)\
             .filter(self.ot.optimization_id == optimization_id).first()
 
         if optimization_task.optimization_type == "EO":
             return self.manage_evolutionary_optimization(optimization=optimization,
                                                          ea_toolbox=ea_toolbox,
-                                                         optimization_id=optimization_id)
+                                                         optimization_id=optimization_id,
+                                                         ct_table=ct_table,
+                                                         oh_table=oh_table)
 
         if optimization_task.optimization_type == "LO":
             return self.manage_linear_optimization(optimization=optimization,
@@ -427,8 +433,12 @@ class OptimizationManager:
                 optimization_task.optimization_state = OPTIMIZATION_RUN
                 self.session.commit()
 
+                individual_ct = get_table_for_optimization_id(CalculationTask, optimization_id)
+                individual_oh = get_table_for_optimization_id(OptimizationHistory, optimization_id)
+
                 Base.metadata.create_all(bind=engine,
-                                         tables=[OptimizationProgress.__table__],
+                                         tables=[individual_ct.__table__,
+                                                 individual_oh.__table__],
                                          checkfirst=True)
 
                 optimization = load_json(new_optimization_task.opt_filepath)
@@ -445,17 +455,19 @@ class OptimizationManager:
 
                 solution = self.manage_any_optimization(optimization_id=optimization_id,
                                                         optimization=optimization,
-                                                        ea_toolbox=ea_toolbox)
+                                                        ea_toolbox=ea_toolbox,
+                                                        ct_table=individual_ct,
+                                                        oh_table=individual_oh)
 
                 optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
-                optimization_task.solution = {"solution": solution}
+                optimization_task.solution = solution
                 optimization_task.optimization_state = OPTIMIZATION_FINISH
                 self.session.commit()
 
-                Base.metadata.drop_all(bind=engine,
-                                       tables=[OptimizationProgress.__table__],
-                                       checkfirst=True)
+                # Base.metadata.drop_all(bind=engine,
+                #                        tables=[OptimizationProgress.__table__],
+                #                        checkfirst=True)
 
                 self.remove_optimization_and_calculation_data(optimization_id=optimization_id)
 

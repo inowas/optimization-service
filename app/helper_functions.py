@@ -21,3 +21,14 @@ def write_json(obj: dict,
                filepath: Union[Path, str]) -> None:
     with open(filepath, "w") as f:
         json.dump(obj, f)
+
+
+def get_table_for_optimization_id(table_class,
+                                  optimization_id):
+    class IndividualTaskTable(table_class):
+        __tablename__ = f"{table_class.__name__}_{optimization_id}"
+
+        def __init__(self, **args):
+            super().__init__(**args)
+
+    return IndividualTaskTable
