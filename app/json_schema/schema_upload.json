@@ -12,7 +12,7 @@
 	"type": {
 	  "description": "A string that shows that the optimization is being started",
 	  "type": "string",
-      "enum": ["optimization_start"]
+      "enum": ["optimization_start", "optimization_abort"]
 	},
     "optimization": {
       "description": "The dictionary with all information regarding the optimization task.",
@@ -60,6 +60,11 @@
           },
           "required": ["method","ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb"],
           "additionalProperties": false
+        },
+        "number_of_solutions": {
+          "description": "number of solutions that should be reported back to the customer",
+          "type": "integer",
+          "minimum": 1
         }
       }
     },

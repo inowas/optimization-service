@@ -294,6 +294,114 @@ class OptimizationManager:
                 Path(calcinput_file).unlink()
                 Path(calcoutput_file).unlink()
 
+    def manage_evolutionary_optimization(self,
+                                         optimization_id,
+                                         optimization,
+                                         ea_toolbox):
+        number_of_generations = optimization["parameters"]["ngen"]
+        population_size = optimization["parameters"]["pop_size"]
+
+        population = ea_toolbox.make_population(population_size)
+
+        for generation in range(number_of_generations):
+            if self.debug:
+                print(f"Generation: {generation}")
+
+            optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
+
+            optimization_task.current_generation = generation + 1  # Table counts to ten
+            optimization_task.current_population = 0
+            self.session.commit()
+
+            if generation > 0:
+                individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
+                                                                        generation=(generation - 1))
+                if self.debug:
+                    print(f"Individuals summarized.")
+
+                population = ea_toolbox.optimize_evolutionary(individuals=individuals)
+
+                if self.debug:
+                    print(f"Population evoluted.")
+
+            self.create_new_calculation_jobs(ct_table=self.ct_eo,
+                                             optimization_id=optimization_id,
+                                             generation=generation,
+                                             population=population)
+
+            if self.debug:
+                print(f"New jobs created.")
+
+            self.await_generation_finished(ct_table=self.ct_eo,
+                                           optimization_id=optimization_id,
+                                           generation=generation)
+
+            if self.debug:
+                print(f"Jobs finished.")
+
+            individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
+                                                                    generation=generation)
+
+            if self.debug:
+                print(f"Generation summarized.")
+
+            population = ea_toolbox.evaluate_finished_calculations(individuals=individuals)
+
+            if self.debug:
+                print(f"Generation evaluated.")
+
+            population = ea_toolbox.select_best_individuals(population=population)
+
+            optimization_progress = OptimizationProgress(
+                author=optimization_task.author,
+                project=optimization_task.project,
+                optimization_id=optimization_id,
+                generation=(generation + 1),
+                scalar_fitness=scalarize_solution(ea_toolbox.select_first_of_hall_of_fame().fitness.values)
+            )
+
+            self.session.add(optimization_progress)
+            self.session.commit()
+
+            if self.debug:
+                print("Generation selected.")
+
+        return ea_toolbox.select_nth_of_hall_of_fame(optimization["number_of_solutions"])
+
+    def manage_linear_optimization(self,
+                                   optimization_id,
+                                   optimization,
+                                   ea_toolbox):
+        def custom_linear_optimization_queue(individual):
+            return self.linear_optimization_queue(optimization_id,
+                                                  individual)
+
+        solution = ea_toolbox.optimize_linear(solution=optimization["solution"],
+                                              function=custom_linear_optimization_queue)
+
+        if self.debug:
+            print("Solution linear optimized.")
+            print(f"Solution: {solution}")
+
+        return solution
+
+    def manage_any_optimization(self,
+                                optimization_id,
+                                optimization,
+                                ea_toolbox):
+        optimization_task = self.session.query(self.ot)\
+            .filter(self.ot.optimization_id == optimization_id).first()
+
+        if optimization_task.optimization_type == "EO":
+            return self.manage_evolutionary_optimization(optimization=optimization,
+                                                         ea_toolbox=ea_toolbox,
+                                                         optimization_id=optimization_id)
+
+        if optimization_task.optimization_type == "LO":
+            return self.manage_linear_optimization(optimization=optimization,
+                                                   ea_toolbox=ea_toolbox,
+                                                   optimization_id=optimization_id)
+
     def run(self):
         """ Function run is used to keep the manager working constantly. It will work on one optimization only and
         fulfill the job which includes constantly creating jobs for one generation, then after calculation
@@ -335,88 +443,9 @@ class OptimizationManager:
                     weights=self.get_weights(data)
                 )
 
-                number_of_generations = optimization["parameters"]["ngen"]
-                population_size = optimization["parameters"]["pop_size"]
-
-                population = ea_toolbox.make_population(population_size)
-
-                for generation in range(number_of_generations):
-                    if self.debug:
-                        print(f"Generation: {generation}")
-
-                    optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
-
-                    optimization_task.current_generation = generation + 1  # Table counts to ten
-                    optimization_task.current_population = 0
-                    self.session.commit()
-
-                    if generation > 0:
-                        individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
-                                                                                generation=(generation-1))
-                        if self.debug:
-                            print(f"Individuals summarized.")
-
-                        population = ea_toolbox.optimize_evolutionary(individuals=individuals)
-
-                        if self.debug:
-                            print(f"Population evoluted.")
-
-                    self.create_new_calculation_jobs(ct_table=self.ct_eo,
-                                                     optimization_id=optimization_id,
-                                                     generation=generation,
-                                                     population=population)
-
-                    if self.debug:
-                        print(f"New jobs created.")
-
-                    self.await_generation_finished(ct_table=self.ct_eo,
-                                                   optimization_id=optimization_id,
-                                                   generation=generation)
-
-                    if self.debug:
-                        print(f"Jobs finished.")
-
-                    individuals = self.summarize_finished_calculation_tasks(ct_table=self.ct_eo,
-                                                                            generation=generation)
-
-                    if self.debug:
-                        print(f"Generation summarized.")
-
-                    population = ea_toolbox.evaluate_finished_calculations(individuals=individuals)
-
-                    if self.debug:
-                        print(f"Generation evaluated.")
-
-                    population = ea_toolbox.select_best_individuals(population=population)
-
-                    optimization_progress = OptimizationProgress(
-                        author=optimization_task.author,
-                        project=optimization_task.project,
-                        optimization_id=optimization_id,
-                        generation=(generation+1),
-                        scalar_fitness=scalarize_solution(ea_toolbox.select_first_of_hall_of_fame().fitness.values)
-                    )
-
-                    self.session.add(optimization_progress)
-                    self.session.commit()
-
-                    if self.debug:
-                        print("Generation selected.")
-
-                solution = ea_toolbox.select_first_of_hall_of_fame()
-
-                # print(solution)
-
-                def custom_linear_optimization_queue(individual):
-                    return self.linear_optimization_queue(optimization_id,
-                                                          individual)
-
-                solution = ea_toolbox.optimize_linear(solution=solution,
-                                                      function=custom_linear_optimization_queue)
-
-                if self.debug:
-                    print("Solution linear optimized.")
-                    print(f"Solution: {solution}")
+                solution = self.manage_any_optimization(optimization_id=optimization_id,
+                                                        optimization=optimization,
+                                                        ea_toolbox=ea_toolbox)
 
                 optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 

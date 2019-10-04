@@ -158,7 +158,8 @@ class EAToolbox:
 
         return population
 
-    def select_first_of_hall_of_fame(self):
+    def select_nth_of_hall_of_fame(self,
+                                   nth):
         """ Function wrapper to return the first of equally optimal solutions of the paretofront-halloffame
 
         Returns:
@@ -167,7 +168,7 @@ class EAToolbox:
 
         """
 
-        return self.hall_of_fame[0]
+        return self.hall_of_fame[:nth]
 
     def optimize_evolutionary(self,
                               individuals: List[dict]) -> List[List[float]]:
