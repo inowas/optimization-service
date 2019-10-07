@@ -14,7 +14,7 @@ class OptimizationTask(Base):
 
     author = Column(String)
     project = Column(String)
-    date = Column(Date)
+    publishing_date = Column(Date)
     optimization_id = Column(String, primary_key=True)
     optimization_type = Column(String)
     optimization_state = Column(String)
@@ -22,7 +22,7 @@ class OptimizationTask(Base):
     total_population = Column(Integer)
     current_generation = Column(Integer)
     total_generation = Column(Integer)
-    solution = Column(ARRAY)
+    solution = Column(ARRAY(Float))
     scalar_fitness = Column(Float)
     opt_filepath = Column(String)
     data_filepath = Column(String)
@@ -47,8 +47,8 @@ class OptimizationTask(Base):
         self.data_filepath = data_filepath
 
 
-class OptimizationHistory(Base):
-    __tablename__ = "optimization_progress"
+class OptimizationHistory:  # (Base)
+    # __tablename__ = "optimization_progress"
 
     author = Column(String)
     project = Column(String)
@@ -66,8 +66,8 @@ class OptimizationHistory(Base):
         self.scalar_fitness = scalar_fitness
 
 
-class CalculationTask(Base):  # EvolutionaryOptimization
-    __tablename__ = "calculation_tasks"  # _evolutionary_optimization
+class CalculationTask:  # EvolutionaryOptimization (Base)
+    # __tablename__ = "calculation_tasks"  # _evolutionary_optimization
 
     author = Column(String)
     project = Column(String)

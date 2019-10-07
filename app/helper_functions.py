@@ -2,6 +2,8 @@ from config import OPTIMIZATION_DATA, JSON_ENDING
 import json
 from pathlib import Path
 from typing import Union
+from copy import deepcopy
+from sqlalchemy.ext.declarative import declarative_base
 
 
 def create_input_and_output_filepath(task_id,
@@ -25,8 +27,12 @@ def write_json(obj: dict,
 
 def get_table_for_optimization_id(table_class,
                                   optimization_id):
-    class IndividualTaskTable(table_class):
-        __tablename__ = f"{table_class.__name__}_{optimization_id}"
+    Base = declarative_base()
+
+    # IndividualTaskTable.__tablename__ = f"{table_class.__name__.lower()}_{optimization_id}"
+
+    class IndividualTaskTable(Base, table_class):
+        __tablename__ = f"{table_class.__name__.lower()}_{optimization_id}"
 
         def __init__(self, **args):
             super().__init__(**args)

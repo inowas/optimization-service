@@ -8,12 +8,13 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
+from helper_functions import get_table_for_optimization_id
 # from IPython.display import HTML
 # from IPython.display import HTML
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from db import Session
-from models import OptimizationTask, OptimizationProgress
+from models import OptimizationTask, OptimizationHistory
 from config import OPT_EXT, DATA_EXT, JSON_SCHEMA_UPLOAD, OPTIMIZATION_RUN
 
 optimization_blueprint = Blueprint("optimization", __name__)
@@ -131,8 +132,11 @@ def show_single_optimization_progress(optimization_id_):
 
         if optimization_task:
             if optimization_task.optimization_state == OPTIMIZATION_RUN:
-                optimization_progress = Session.query(OptimizationProgress).\
-                    filter(OptimizationProgress.optimization_id == optimization_id_)
+                optimization_id = optimization_task.optimization_id
+
+                individual_oh = get_table_for_optimization_id(OptimizationHistory, optimization_id)
+
+                optimization_progress = Session.query(individual_oh)
 
                 if optimization_progress.first():
                     optimization_progress_df = pd.read_sql(optimization_progress.statement, Session.bind)

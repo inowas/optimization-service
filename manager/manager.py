@@ -2,15 +2,17 @@ import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
+import datetime
 from pathlib import Path
 from uuid import uuid4
+from sqlalchemy import cast, Date
 from typing import Dict, Union, Tuple, List, Optional
 from helper_functions import create_input_and_output_filepath, load_json, write_json, get_table_for_optimization_id
 from evolutionary_toolbox import EAToolbox
 from db import Session, engine
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
-    CALCULATION_FINISH, OPTIMIZATION_FINISH
+    CALCULATION_FINISH, OPTIMIZATION_FINISH, MAX_STORING_TIME_OPTIMIZATION_TASKS
 
 
 def scalarize_solution(solution):
@@ -22,17 +24,16 @@ class OptimizationManager:
                  session,
                  ea_toolbox,
                  optimization_task,
-                 # calculation_task_evolutionary_optimization,
-                 # calculation_task_linear_optimization,
+                 optimization_history,
+                 calculation_task,
                  debug: bool = False,
                  print_progress: bool = False):
         self.session = session
         self.ea_toolbox = ea_toolbox
 
         self.ot = optimization_task
-        # self.ct = None
-        # self.ct_eo = calculation_task_evolutionary_optimization
-        # self.ct_lo = calculation_task_linear_optimization
+        self.oh = optimization_history
+        self.ct = calculation_task
 
         self.debug = debug
         self.debug_counter = 0
@@ -187,6 +188,7 @@ class OptimizationManager:
             project=optimization_task.project,
             optimization_id=optimization_task.optimization_id,
             calculation_id=calculation_id,
+            calculation_type=optimization_task.optimization_type,
             calculation_state=CALCULATION_START,  # Set state to start
             generation=generation,
             individual_id=individual_id,
@@ -249,7 +251,7 @@ class OptimizationManager:
         individual_id = 0
         total_population = 1
 
-        individual = list(individual)  # Hotfix for mystic solver, that converts our solution to a numpy array
+        individual = list(individual)  # Mystic solver converts solution to a numpy array; we need a list
 
         self.create_single_calculation_job(ct_table=ct_table,
                                            optimization_id=optimization_id,
@@ -294,6 +296,24 @@ class OptimizationManager:
             Path(calcinput_file).unlink()
             Path(calcoutput_file).unlink()
 
+    def remove_old_optimization_tasks(self):
+        now_date = datetime.datetime.now().date()
+
+        optimization_tasks = self.session.query(self.ot).all()
+
+        old_optimization_tasks = [task
+                                  for task in optimization_tasks
+                                  if ((now_date - task.publishing_date).days > MAX_STORING_TIME_OPTIMIZATION_TASKS)]
+
+        # .filter((now_date - self.ot.publishing_date).days > MAX_STORING_TIME_OPTIMIZATION_TASKS).all()
+
+        if old_optimization_tasks:
+            pass
+
+
+
+
+
     def manage_evolutionary_optimization(self,
                                          optimization_id,
                                          optimization,
@@ -324,7 +344,7 @@ class OptimizationManager:
                 population = ea_toolbox.optimize_evolutionary(individuals=individuals)
 
                 if self.debug:
-                    print(f"Population evoluted.")
+                    print(f"Population developed.")
 
             self.create_new_calculation_jobs(ct_table=ct_table,
                                              optimization_id=optimization_id,
@@ -359,7 +379,7 @@ class OptimizationManager:
                 project=optimization_task.project,
                 optimization_id=optimization_id,
                 generation=(generation + 1),
-                scalar_fitness=scalarize_solution(ea_toolbox.select_first_of_hall_of_fame().fitness.values)
+                scalar_fitness=scalarize_solution(ea_toolbox.select_nth_of_hall_of_fame(1)[0].fitness.values)
             )
 
             self.session.add(optimization_history)
@@ -420,21 +440,19 @@ class OptimizationManager:
         """
 
         while True:
-            if self.debug:
-                print("No job. Sleeping for 10 seconds.")
-                sleep(10)
-
             new_optimization_task = self.query_first_starting_optimization_task()
 
             if new_optimization_task:
+                print(f"Working on task with id: {new_optimization_task.optimization_id}")
+
                 optimization_id = new_optimization_task.optimization_id
 
                 optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
                 optimization_task.optimization_state = OPTIMIZATION_RUN
                 self.session.commit()
 
-                individual_ct = get_table_for_optimization_id(CalculationTask, optimization_id)
-                individual_oh = get_table_for_optimization_id(OptimizationHistory, optimization_id)
+                individual_oh = get_table_for_optimization_id(self.oh, optimization_id)
+                individual_ct = get_table_for_optimization_id(self.ct, optimization_id)
 
                 Base.metadata.create_all(bind=engine,
                                          tables=[individual_ct.__table__,
@@ -465,13 +483,12 @@ class OptimizationManager:
                 optimization_task.optimization_state = OPTIMIZATION_FINISH
                 self.session.commit()
 
-                # Base.metadata.drop_all(bind=engine,
-                #                        tables=[OptimizationProgress.__table__],
-                #                        checkfirst=True)
-
+                # Remove single job properties
                 self.remove_optimization_and_calculation_data(optimization_id=optimization_id)
 
                 continue
+
+            self.remove_old_optimization_tasks()
 
             print("No jobs. Sleeping for 1 minute.")
             sleep(60)
@@ -484,8 +501,8 @@ if __name__ == '__main__':
         session=Session,
         ea_toolbox=EAToolbox,
         optimization_task=OptimizationTask,
-        calculation_task_evolutionary_optimization=CalculationTaskEvolutionaryOptimization,
-        calculation_task_linear_optimization=CalculationTaskLinearOptimization,
+        calculation_task=CalculationTask,
+        optimization_history=OptimizationHistory,
         debug=True
     )
 

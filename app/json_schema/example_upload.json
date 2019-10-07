@@ -5,6 +5,7 @@
   "type": "optimization_start",
   "optimization": {
     "parameters": {
+      "method": "EO",
       "ngen": 250,
       "pop_size": 100,
       "mutpb": 0.1,

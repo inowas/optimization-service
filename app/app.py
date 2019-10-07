@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from views import optimization_blueprint
 from config import DATABASE_URL
-from models import Base, OptimizationTask, CalculationTaskEvolutionaryOptimization, CalculationTaskLinearOptimization
+from models import Base, OptimizationTask
 from db import engine
 from time import sleep
 # https://www.compose.com/articles/using-postgresql-through-sqlalchemy/
