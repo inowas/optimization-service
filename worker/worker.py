@@ -104,8 +104,8 @@ class WorkerManager:
 
                     continue
 
-            print("No jobs. Sleeping for 30 seconds.")
-            sleep(30)
+            # print("No jobs. Sleeping for 30 seconds.")
+            # sleep(30)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, Integer, Float, Date, ARRAY
 from sqlalchemy.dialects.postgresql import UUID
-import datetime
+from datetime import datetime
 from config import INITIAL_SCALAR_FITNESS
 
 
@@ -14,7 +14,7 @@ class OptimizationTask(Base):
 
     author = Column(String)
     project = Column(String)
-    publishing_date = Column(Date)
+    publishing_date = Column(String)
     optimization_id = Column(String, primary_key=True)
     optimization_type = Column(String)
     optimization_state = Column(String)
@@ -33,7 +33,7 @@ class OptimizationTask(Base):
 
         self.author = author
         self.project = project
-        self.date = datetime.datetime.now().date()
+        self.publishing_date = str(datetime.now().date())
         self.optimization_id = optimization_id
         self.optimization_type = optimization_type
         self.optimization_state = optimization_state
@@ -96,33 +96,3 @@ class CalculationTask:  # EvolutionaryOptimization (Base)
         self.data_filepath = data_filepath
         self.calcinput_filepath = calcinput_filepath
         self.calcoutput_filepath = calcoutput_filepath
-
-
-# class CalculationTaskLinearOptimization(Base):
-#     __tablename__ = "calculation_tasks_linear_optimization"
-#
-#     author = Column(String)
-#     project = Column(String)
-#     optimization_id = Column(String)
-#     calculation_id = Column(UUID(as_uuid=True), primary_key=True, unique=True)
-#     calculation_state = Column(String)
-#     generation = Column(Integer)
-#     individual_id = Column(Integer)
-#     data_filepath = Column(String)
-#     calcinput_filepath = Column(String)
-#     calcoutput_filepath = Column(String)
-#
-#     def __init__(self, author, project, optimization_id, calculation_id, calculation_state, generation, individual_id,
-#                  data_filepath, calcinput_filepath, calcoutput_filepath, **args):
-#         super().__init__(**args)
-#
-#         self.author = author
-#         self.project = project
-#         self.optimization_id = optimization_id
-#         self.calculation_id = calculation_id
-#         self.calculation_state = calculation_state
-#         self.generation = generation
-#         self.individual_id = individual_id
-#         self.data_filepath = data_filepath
-#         self.calcinput_filepath = calcinput_filepath
-#         self.calcoutput_filepath = calcoutput_filepath

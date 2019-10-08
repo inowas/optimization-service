@@ -2,17 +2,17 @@ import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
-import datetime
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
-from sqlalchemy import cast, Date
+from sqlalchemy import cast, Date, or_
 from typing import Dict, Union, Tuple, List, Optional
 from helper_functions import create_input_and_output_filepath, load_json, write_json, get_table_for_optimization_id
 from evolutionary_toolbox import EAToolbox
 from db import Session, engine
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
-    CALCULATION_FINISH, OPTIMIZATION_FINISH, MAX_STORING_TIME_OPTIMIZATION_TASKS
+    CALCULATION_FINISH, OPTIMIZATION_FINISH, MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, DATE_FORMAT
 
 
 def scalarize_solution(solution):
@@ -285,39 +285,43 @@ class OptimizationManager:
         Path(optimization_task.opt_filepath).unlink()
         Path(optimization_task.data_filepath).unlink()
 
-        ct_table = get_table_for_optimization_id(CalculationTask, optimization_id)
+        individual_ct = get_table_for_optimization_id(CalculationTask, optimization_id)
 
-        calculations = self.session.query(ct_table).all()
+        calculations = self.session.query(individual_ct).all()
 
-        calculation_files = [(calculation.calcinputfilepath,  calculation.calcoutput_filepath)
+        calculation_files = [(calculation.calcinput_filepath,  calculation.calcoutput_filepath)
                              for calculation in calculations]
 
         for calcinput_file, calcoutput_file in calculation_files:
             Path(calcinput_file).unlink()
             Path(calcoutput_file).unlink()
 
-    def remove_old_optimization_tasks(self):
-        now_date = datetime.datetime.now().date()
+    def remove_old_optimization_tasks_and_tables(self):
+        now_date = datetime.now().date()
 
-        optimization_tasks = self.session.query(self.ot).all()
+        optimization_tasks = self.session.query(self.ot)\
+            .filter(or_(self.ot.optimization_state == OPTIMIZATION_FINISH,
+                        self.ot.optimization_state == OPTIMIZATION_ABORT)).all()
 
         old_optimization_tasks = [task
                                   for task in optimization_tasks
-                                  if ((now_date - task.publishing_date).days > MAX_STORING_TIME_OPTIMIZATION_TASKS)]
-
-        # .filter((now_date - self.ot.publishing_date).days > MAX_STORING_TIME_OPTIMIZATION_TASKS).all()
+                                  if ((now_date - datetime.strptime(task.publishing_date, DATE_FORMAT)).days >
+                                      MAX_STORING_TIME_OPTIMIZATION_TASKS)]
 
         if old_optimization_tasks:
-            pass
+            for task in old_optimization_tasks:
+                individual_ct = get_table_for_optimization_id(CalculationTask, task.optimization_id)
+                individual_oh = get_table_for_optimization_id(OptimizationHistory, task.optimization_id)
 
+                Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
 
-
-
+                self.session.remove(task)
+                self.session.commit()
 
     def manage_evolutionary_optimization(self,
-                                         optimization_id,
-                                         optimization,
-                                         ea_toolbox,
+                                         optimization_id: str,
+                                         optimization: dict,
+                                         ea_toolbox: EAToolbox,
                                          ct_table,
                                          oh_table):
         number_of_generations = optimization["parameters"]["ngen"]
@@ -488,10 +492,10 @@ class OptimizationManager:
 
                 continue
 
-            self.remove_old_optimization_tasks()
+            self.remove_old_optimization_tasks_and_tables()
 
-            print("No jobs. Sleeping for 1 minute.")
-            sleep(60)
+            # print("No jobs. Sleeping for 1 minute.")
+            # sleep(60)
 
 
 if __name__ == '__main__':

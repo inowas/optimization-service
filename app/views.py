@@ -152,13 +152,25 @@ def show_single_optimization_progress(optimization_id_):
 
                     output = BytesIO()
 
-                    plt.figure()
-                    optimization_progress_df.plot(x="generation", y="scalar_fitness")
-                    plt.title(f"Optimization ID: {optimization_id_}\n"
-                              f"Generation: {(optimization_task.current_generation-1)}/"
-                              f"{optimization_task.total_generation}")
+                    fig = plt.figure()
+                    ax = fig.add_subplot(111)
 
-                    plt.savefig(output, format='png')
+                    optimization_progress_df.plot(x="generation",
+                                                  y="scalar_fitness",
+                                                  logy=True,
+                                                  legend=False,
+                                                  ax=ax)
+
+                    ax.set_title(f"Optimization ID: {optimization_id_}\n"
+                                 f"Generation: {(optimization_task.current_generation-1)}/"
+                                 f"{optimization_task.total_generation}")
+
+                    ax.text(x=0.7,
+                            y=0.9,
+                            transform=ax.transAxes,
+                            s=f"Current best fitness: {optimization_progress_df['scalar_fitness'].iloc[-1]}")
+
+                    fig.savefig(output, format='png')
 
                     return Response(output.getvalue(), mimetype='image/png')
 
