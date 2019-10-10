@@ -6,11 +6,12 @@ JSON_SCHEMA_UPLOAD = "./json_schema/schema_upload.json"
 
 # Folder for optimization data
 OPTIMIZATION_DATA = "/optimization-data/"
+CALCULATION_DATA = "/calculation-data/"
 
 # Optimization ext
-OPT_EXT = "_optimization"
+OPTIMIZATION_FILE = "optimization"
 # Data ext
-DATA_EXT = "_data"
+DATA_FILE = "data"
 
 # Calculation input ext
 CALC_INPUT_EXT = "_input"
