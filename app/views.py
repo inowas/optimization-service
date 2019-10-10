@@ -15,7 +15,7 @@ from helper_functions import get_table_for_optimization_id
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from db import Session
 from models import OptimizationTask, OptimizationHistory
-from config import OPT_EXT, DATA_EXT, JSON_SCHEMA_UPLOAD, OPTIMIZATION_RUN
+from config import OPTIMIZATION_FILE, DATA_FILE, JSON_SCHEMA_UPLOAD, OPTIMIZATION_RUN
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -31,12 +31,12 @@ def upload_file() -> jsonify:
             return render_template('upload.html', error="No file selected!")
 
         file_upload = request.files["file"]
-        req_data = json.load(file_upload)
+        request_data = json.load(file_upload)
 
         schema_upload = load_json(JSON_SCHEMA_UPLOAD)
 
         try:
-            validate(instance=req_data,
+            validate(instance=request_data,
                      schema=schema_upload)
 
         except ValidationError as e:
@@ -51,19 +51,22 @@ def upload_file() -> jsonify:
         except SchemaError as e:
             return render_template('upload.html', error=str(e))
 
-        author = req_data.get("author", "Max Mustermann")
-        project = req_data.get("project", "Standardprojekt")
-        optimization_id = req_data["optimization_id"]
-        optimization_state = req_data["type"]
-        optimization = req_data["optimization"]
+        author = request_data.get("author", "unknown")
+        project = request_data.get("project", "unknown")
+        optimization_id = request_data["optimization_id"]
+        optimization_state = request_data["type"]
+        # calculation_id
+        # model_id
+
+        optimization = request_data["optimization"]
+        data = request_data["data"]
+
         method = optimization["parameters"]["method"]
         population_size = optimization["parameters"]["pop_size"]
         total_generation = optimization["parameters"]["ngen"]
 
-        data = req_data["data"]
-
         opt_filepath, data_filepath = create_input_and_output_filepath(task_id=optimization_id,
-                                                                       extensions=[OPT_EXT, DATA_EXT])
+                                                                       extensions=[OPTIMIZATION_FILE, DATA_FILE])
 
         optimizationtask = OptimizationTask(
                                 author=author,
