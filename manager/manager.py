@@ -202,8 +202,6 @@ class OptimizationManager:
 
         # print(f"Generation {generation}: Wrote job json.")
 
-        # Todo check functionality of session.commit(seems to be bugged, as second generation tasks weren't pushed to
-        # the database)
         self.session.add(new_calc_task)
         self.session.commit()
 

@@ -9,13 +9,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
 from helper_functions import get_table_for_optimization_id
-# from IPython.display import HTML
-# from IPython.display import HTML
+from shutil import rmtree
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from db import Session
 from models import OptimizationTask, OptimizationHistory
-from config import OPTIMIZATION_FILE, DATA_FILE, JSON_SCHEMA_UPLOAD, OPTIMIZATION_RUN
+from config import OPTIMIZATION_FILE, DATA_FILE, JSON_SCHEMA_UPLOAD, OPTIMIZATION_RUN, OPTIMIZATION_DATA
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -65,8 +64,10 @@ def upload_file() -> jsonify:
         population_size = optimization["parameters"]["pop_size"]
         total_generation = optimization["parameters"]["ngen"]
 
-        opt_filepath, data_filepath = create_input_and_output_filepath(task_id=optimization_id,
-                                                                       extensions=[OPTIMIZATION_FILE, DATA_FILE])
+        # Create folder named after task_id in optimization_data folder
+        opt_filepath, data_filepath = create_input_and_output_filepath(folder=OPTIMIZATION_DATA,
+                                                                       task_id=optimization_id,
+                                                                       file_types=[OPTIMIZATION_FILE, DATA_FILE])
 
         optimizationtask = OptimizationTask(
                                 author=author,
@@ -92,9 +93,10 @@ def upload_file() -> jsonify:
 
             Session.commit()
         except (UnicodeDecodeError, IOError):
-            Path(opt_filepath).unlink()
-
-            Path(data_filepath).unlink()
+            rmtree(Path(OPTIMIZATION_DATA, optimization_id))
+            # Path(opt_filepath).unlink()
+            #
+            # Path(data_filepath).unlink()
 
             Session.rollback()
 
@@ -179,6 +181,6 @@ def show_single_optimization_progress(optimization_id_):
 
             return abort(404, f"Optimization with id {optimization_id_} isn't running. Progress graph not available!")
 
-        return abort(404, f"Optimization with id {optimization_id_} doesn't exist.")
+        return abort(404, f"Optimization with id {optimization_id_} does not exist.")
 
     pass
