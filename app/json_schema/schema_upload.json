@@ -9,6 +9,11 @@
       "description": "The unique identifier for an optimization task.",
       "type": "string"
     },
+	"type": {
+	  "description": "A string that shows that the optimization is being started",
+	  "type": "string",
+      "enum": ["optimization_start", "optimization_abort"]
+	},
     "optimization": {
       "description": "The dictionary with all information regarding the optimization task.",
       "type": "object",
@@ -17,6 +22,11 @@
           "description": "Optimization parameters holding information concerning the GA",
           "type": "object",
           "properties": {
+            "method": {
+              "description": "Type of optimization; either EO (evolutionary optimization) or LO (linear optimization).",
+              "type": "string",
+              "enum": ["EO", "LO"]
+            },
             "ngen": {
               "description": "Number of generations of GA",
               "type": "integer"
@@ -48,8 +58,13 @@
               "maximum": 1
             }
           },
-          "required": ["ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb"],
+          "required": ["method","ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb"],
           "additionalProperties": false
+        },
+        "number_of_solutions": {
+          "description": "number of solutions that should be reported back to the customer",
+          "type": "integer",
+          "minimum": 1
         }
       }
     },
@@ -76,18 +91,18 @@
         "individual": {
           "type": "object",
           "properties": {
-            "genes": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 15
-            },
             "boundaries": {
               "type": "array",
               "items": {
-                "type": "integer"
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
               },
-              "minItems": 2,
-              "maxItems": 2
+              "minItems": 1,
+              "maxItems": 15
             }
           }
         }

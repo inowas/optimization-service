@@ -1,20 +1,17 @@
 {
   "author": "author",
   "project": "project",
-  "optimization_id": "12345",
-  "type": "optimization_start",
+  "optimization_id": "67890",
+  "optimization_state": "optimization_start",
   "optimization": {
     "parameters": {
-      "method": "EO",
-      "ngen": 250,
+      "ngen": 10,
       "pop_size": 100,
       "mutpb": 0.1,
       "cxpb": 0.9,
       "eta": 20,
       "indpb": 0.2
-    },
-    "solution": [[]],
-    "number_of_solutions": 10
+    }
   },
   "data": {
     "functions": {
@@ -28,8 +25,8 @@
       }
     },
     "individual": {
-      "boundaries": [[-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0],
-        [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0]]
+      "genes": 8,
+      "boundaries": [[-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0]]
     }
   }
 }

@@ -5,3 +5,4 @@ optimization-data/
 uploads/
 /traefik/logs
 /traefik/acme.json
+*/__pycache__
