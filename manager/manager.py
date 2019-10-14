@@ -11,6 +11,7 @@ from helper_functions import create_input_and_output_filepath, load_json, write_
 from evolutionary_toolbox import EAToolbox
 from db import Session, engine
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory
+from config import OPTIMIZATION_DATA
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
     CALCULATION_FINISH, OPTIMIZATION_FINISH, MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, DATE_FORMAT
 
@@ -62,16 +63,16 @@ class OptimizationManager:
         return uuid4()
 
     @staticmethod
-    def get_weights(data: dict):
+    def get_weights(optimization_data: dict):
         """ Function used to extract objectives from the json that holds the whole optimization task
 
         Args:
-            data (dictionary) - the data as hold by the uploaded json
+            optimization_data (dictionary) - optimization_data from optimization json
 
         Returns:
              objectives (tuple of ints) - the objectives of each function as presented in the json
         """
-        return tuple(data["functions"][fun]["objective"] for fun in data["functions"])
+        return tuple(objective["weight"] for objective in optimization_data["objectives"])
 
     def query_first_starting_optimization_task(self) -> Session.query:
         """
@@ -179,9 +180,8 @@ class OptimizationManager:
 
         calculation_id = self.create_unique_id()
 
-        calcinput_filepath, calcoutput_filepath = create_input_and_output_filepath(task_id=calculation_id,
-                                                                                   extensions=[CALC_INPUT_EXT,
-                                                                                               CALC_OUTPUT_EXT])
+        calcinput_filepath, calcoutput_filepath = create_input_and_output_filepath(
+            folder=OPTIMIZATION_DATA, task_id=calculation_id, file_types=[CALC_INPUT_EXT, CALC_OUTPUT_EXT])
 
         new_calc_task = ct_table(
             author=optimization_task.author,
@@ -265,16 +265,16 @@ class OptimizationManager:
         solution_dict = self.summarize_finished_calculation_tasks(ct_table=ct_table,
                                                                   generation=generation)[0]
 
-        solution = [solution_dict["functions"][fun] for fun in solution_dict["functions"]]
+        scalar_solution = scalarize_solution(solution_dict["fitness"])
 
-        print(solution)
+        # print(solution)
 
         optimization_task = self.query_optimization_task_with_id(optimization_id=optimization_id)
 
-        optimization_task.scalar_fitness = scalarize_solution(solution)
+        optimization_task.scalar_fitness = scalar_solution
         self.session.commit()
 
-        return scalarize_solution(solution)
+        return scalar_solution
 
     def remove_optimization_and_calculation_data(self,
                                                  optimization_id: uuid4) -> None:
@@ -470,7 +470,7 @@ class OptimizationManager:
                     indpb=optimization["parameters"]["indpb"],
                     cxpb=optimization["parameters"]["cxpb"],
                     mutpb=optimization["parameters"]["mutpb"],
-                    weights=self.get_weights(data)
+                    weights=self.get_weights(optimization)
                 )
 
                 solution = self.manage_any_optimization(optimization_id=optimization_id,

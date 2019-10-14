@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import Union
 from copy import deepcopy
 from sqlalchemy.ext.declarative import declarative_base
+from uuid import uuid4
 from typing import List
 
 
 def create_input_and_output_filepath(folder: Union[str, Path],
-                                     task_id: str,
+                                     task_id: Union[str, uuid4],
                                      file_types: List[str]):
     if not Path(folder).is_dir():
         raise NotADirectoryError(f"Error: the folder {folder} does not exist.")

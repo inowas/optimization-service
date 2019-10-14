@@ -6,7 +6,7 @@ JSON_SCHEMA_UPLOAD = "./json_schema/schema_upload.json"
 
 # Folder for optimization data
 OPTIMIZATION_DATA = "/optimization-data/"
-CALCULATION_DATA = "/calculation-data/"
+# CALCULATION_DATA = "/calculation-data/"
 
 # Optimization ext
 OPTIMIZATION_FILE = "optimization"

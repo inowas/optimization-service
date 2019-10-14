@@ -8,12 +8,15 @@ import os
 import math
 import numpy as np
 import flopy
+from typing import Union
 
 
 class InowasFlopyReadFitness:
     """Calculation of objective values of a model """
 
-    def __init__(self, optimization_data, flopy_adapter):
+    def __init__(self,
+                 optimization_data: dict,
+                 flopy_adapter: Union[flopy.modflow.mf.Modflow, flopy.mt3d.mt.Mt3dms]):
 
         self.optimization_data = optimization_data
 
@@ -30,13 +33,12 @@ class InowasFlopyReadFitness:
         else:
             self.fitness = objectives_values
 
-
     def get_fitness(self):
 
         return self.fitness
 
     def read_objectives(self):
-        "Returnes fitnes list"
+        """Returnes fitnes list"""
         fitness = []
 
         for objective in self.optimization_data["objectives"]:
@@ -52,12 +54,10 @@ class InowasFlopyReadFitness:
                     objective["location"], self.objects, self.dis_package
                 )
                 value = self.read_head(objective, mask, self.model_ws, self.model_name)
-          
 
             elif objective["type"] == "flux":
                 value = self.read_flux(objective, self.objects)
 
-            
             elif objective["type"] == "input_concentration":
                 value = self.read_input_concentration(objective, self.objects)
             
@@ -129,7 +129,6 @@ class InowasFlopyReadFitness:
             result = np.max(result)
         
         return result
-
 
     @staticmethod
     def read_head(data, mask, model_ws, model_name):
@@ -227,9 +226,8 @@ class InowasFlopyReadFitness:
                     obj_concentrations.append(period_data[component]['result'])
                 input_concentrations = np.hstack(
                     (input_concentrations, 
-                    np.array(obj_concentrations))
+                     np.array(obj_concentrations))
                 )
-        
 
         return input_concentrations
     
@@ -365,6 +363,6 @@ class InowasFlopyReadFitness:
                     cols.append(obj['position']['col']['result'])
 
             mask = np.zeros((nstp_flat, nlay, nrow, ncol), dtype=bool)
-            mask[:,lays,rows,cols] = True
+            mask[:, lays, rows, cols] = True
         
         return mask
