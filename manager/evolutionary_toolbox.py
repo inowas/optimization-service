@@ -114,11 +114,13 @@ class EAToolbox:
         return self.toolbox.population(population_size)
 
     def evaluate_finished_calculations(self,
-                                       individuals: List[dict]) -> List[List[float]]:
+                                       individuals: List[List[float]],
+                                       fitnesses: List[float]) -> List[List[float]]:
         """ Function the complete the individuals with their fitness in form of the function returns
 
         Args:
-            individuals: a list of dicts that define each individual - by parameters and by function evaluations
+            individuals (list) - a list of lists that define each individual - by parameters and by function evaluations
+            fitnesses (list) -
 
         Returns:
             population: a population of individuals that have a fitness on them based on the function returns (tuple of
@@ -126,13 +128,12 @@ class EAToolbox:
 
         """
         population = []
-        for ind in individuals:
+        for ind, fitness in individuals, fitnesses:
             individual = self.default_individual()
 
-            individual.extend(ind["ind_genes"])
+            individual.extend(ind)
 
-            individual.fitness.values = tuple(ind["functions"][fun] for fun in ind["functions"])
-            # individual.fitness.valid = True
+            individual.fitness.values = tuple(fitness)
 
             population.append(individual)
 
@@ -170,7 +171,8 @@ class EAToolbox:
         return self.hall_of_fame[:nth]
 
     def optimize_evolutionary(self,
-                              individuals: List[dict]) -> List[List[float]]:
+                              individuals: List[List[float]],
+                              fitnesses: List[float]) -> List[List[float]]:
         """ Function to optimize a list of individuals with an genetic algorithm from the deap library
 
         Args:
@@ -181,7 +183,8 @@ class EAToolbox:
             None - the base individual is written on self.default_individual
 
         """
-        population = self.evaluate_finished_calculations(individuals=individuals)
+        population = self.evaluate_finished_calculations(individuals=individuals,
+                                                         fitnesses=fitnesses)
 
         population = self.select_best_individuals(population=population)
 

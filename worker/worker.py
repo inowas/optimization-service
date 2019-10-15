@@ -16,7 +16,7 @@ from db import Session
 from models import CalculationTask, OptimizationTask
 from .numpy_function_mapping import STRING_TO_NUMPY_FUNCTION
 from config import OPTIMIZATION_RUN, CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH, \
-    OPTIMIZATION_TYPE_EVOLUTION, CALCULATION_DATA, MODFLOW_EXE
+    OPTIMIZATION_TYPE_EVOLUTION, MODFLOW_EXE, OPTIMIZATION_DATA
 # from x_helper import g_mod
 
 MISSING_DATA_VALUE = -9999
@@ -109,31 +109,36 @@ class WorkerManager:
         self.session = session
         self.ot = optimization_task
         self.ct = calculation_task
-        # self.ct_lo = calculation_task_linear_optimization
 
-    def query_first_starting_calculation_task(self,
-                                              ct_table) -> Session.query:
+        # Temporary attributes
+        self.current_optimization_id = None
+        self.current_calculation_id = None
+        self.current_ct = None
+
+    def reset_temporary_attributes(self):
+        self.current_optimization_id = None
+        self.current_calculation_id = None
+        self.current_ct = None
+
+    def query_first_starting_calculation_task(self) -> Session.query:
         """
 
         Returns:
             query - first optimization task in list
 
         """
-        return self.session.query(ct_table)\
-            .filter(ct_table.calculation_state == CALCULATION_START).first()
+        return self.session.query(self.current_ct)\
+            .filter(self.current_ct.calculation_state == CALCULATION_START).first()
 
-    def query_calculation_task_with_id(self,
-                                       ct_table,
-                                       calculation_id) -> Session.query:
+    def query_calculation_task_with_id(self) -> Session.query:
 
-        return self.session.query(ct_table).\
-            filter(ct_table.calculation_id == calculation_id).first()
+        return self.session.query(self.current_ct).\
+            filter(self.current_ct.calculation_id == self.current_calculation_id).first()
 
-    def query_optimization_task_with_id(self,
-                                        optimization_id) -> Session.query:
+    def query_current_optimization_task(self) -> Session.query:
 
         return self.session.query(self.ot).\
-            filter(self.ot.optimization_id == optimization_id).first()
+            filter(self.ot.optimization_id == self.current_optimization_id).first()
 
     def run(self):
         while True:
@@ -141,14 +146,14 @@ class WorkerManager:
                 .filter(self.ot.optimization_state == OPTIMIZATION_RUN).first()
 
             if running_optimization_task:
-                optimization_id = running_optimization_task.optimization_id
 
-                individual_ct = get_table_for_optimization_id(CalculationTask, optimization_id)
+                self.current_optimization_id = running_optimization_task.optimization_id
+                self.current_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
 
-                new_calculation_task = self.query_first_starting_calculation_task(individual_ct)
+                new_calculation_task = self.query_first_starting_calculation_task()
 
                 if new_calculation_task:
-                    calculation_id = new_calculation_task.calculation_id
+                    self.current_calculation_id = new_calculation_task.calculation_id
 
                     # calculation_task = self.query_calculation_task_with_id(ct_table=ct_table,
                     #                                                        calculation_id=calculation_id)
@@ -158,19 +163,18 @@ class WorkerManager:
                     self.session.commit()
 
                     data = load_json(new_calculation_task.data_filepath)
-                    optimization_data = load_json(new_calculation_task.optimization_filepath)
+                    # optimization_data = load_json(new_calculation_task.optimization_filepath)
                     calculation_data = load_json(new_calculation_task.calcinput_filepath)
 
                     # Build model
-                    modelname = calculation_id
-                    modelpath = Path(CALCULATION_DATA, calculation_id)
-
                     modflowmodel = ModflowModel(version=new_calculation_task.version,
-                                                optimization_id=optimization_id,
+                                                optimization_id=self.current_optimization_id,
                                                 data=data,
-                                                optimization_data=optimization_data,
-                                                modelname=modelname,
-                                                modelpath=modelpath)
+                                                optimization_data=calculation_data,
+                                                modelname=self.current_calculation_id,
+                                                modelpath=Path(OPTIMIZATION_DATA,
+                                                               self.current_optimization_id,
+                                                               self.current_calculation_id))
 
                     modflowmodel.run()
 
@@ -182,9 +186,7 @@ class WorkerManager:
                                filepath=new_calculation_task.calcoutput_filepath)
 
                     # print("Wrote json.")
-                    #
-                    # calculation_task = self.query_calculation_task_with_id(ct_table=ct_table,
-                    #                                                        calculation_id=calculation_id)
+
                     new_calculation_task.calculation_state = CALCULATION_FINISH
 
                     if running_optimization_task.optimization_type == OPTIMIZATION_TYPE_EVOLUTION:
@@ -194,9 +196,6 @@ class WorkerManager:
                     # print("Session committed.")
 
                     continue
-
-            # print("No jobs. Sleeping for 30 seconds.")
-            # sleep(30)
 
 
 if __name__ == '__main__':
