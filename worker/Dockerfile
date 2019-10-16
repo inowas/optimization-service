@@ -10,7 +10,7 @@ RUN buildDeps="unzip wget g++ gfortran make" && \
 
 # Install required packages
 # Numpy needed in more current version then 1.12.0!
-RUN pip install numpy
+RUN pip install numpy==1.17.2
 RUN pip install requests
 # Compile modflow-excecutables
 RUN pip install https://github.com/modflowpy/pymake/zipball/master

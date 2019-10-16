@@ -2,7 +2,6 @@ import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
-from sympy import lambdify, Symbol
 from pathlib import Path
 import flopy
 import numpy as np
@@ -14,16 +13,11 @@ from InowasFlopyAdapter.InowasFlopyCalculationAdapter import InowasFlopyCalculat
 from helper_functions import load_json, write_json, get_table_for_optimization_id
 from db import Session
 from models import CalculationTask, OptimizationTask
-from .numpy_function_mapping import STRING_TO_NUMPY_FUNCTION
+from numpy_function_mapping import STRING_TO_NUMPY_FUNCTION
 from config import OPTIMIZATION_RUN, CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH, \
-    OPTIMIZATION_TYPE_EVOLUTION, MODFLOW_EXE, OPTIMIZATION_DATA
-# from x_helper import g_mod
+    OPTIMIZATION_TYPE_EVOLUTION, OPTIMIZATION_DATA
 
 MISSING_DATA_VALUE = -9999
-
-G_MOD_CONST = 10000
-
-X_SYMB = Symbol("x")
 
 
 class ModflowModel:
@@ -35,6 +29,19 @@ class ModflowModel:
                  optimization_data: dict,
                  modelname: str = None,
                  modelpath: Union[str, Path] = None):
+        if not isinstance(version, str):
+            raise TypeError("Error: 'version' is not of type string.")
+        if not isinstance(optimization_id, str):
+            raise TypeError("Error: 'optimization_id' is not of type string.")
+        if not isinstance(data, dict):
+            raise TypeError("Error: 'data' is not of type dict.")
+        if not isinstance(optimization_data, dict):
+            raise TypeError("Error: 'optimization_data' is not of type dict.")
+        if not isinstance(modelname, str):
+            raise TypeError("Error: 'modelname' is not of type string.")
+        if not isinstance(modelpath, (str, Path)):
+            raise TypeError("Error: 'modelpath' is not of type string/Path.")
+
         self.version = version
         self.optimization_id = optimization_id
         self.data = data

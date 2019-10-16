@@ -24,7 +24,7 @@ def scalarize_solution(solution):
 class OptimizationManager:
     def __init__(self,
                  session,
-                 ea_toolbox,
+                 ea_toolbox: EAToolbox,
                  optimization_task,
                  optimization_history,
                  calculation_task,
@@ -486,11 +486,11 @@ class OptimizationManager:
         return self.current_eat.select_nth_of_hall_of_fame(self.current_optimization_data["number_of_solutions"])
 
     def manage_linear_optimization(self):
-        def custom_linear_optimization_queue(individual):
-            return self.linear_optimization_queue(individual)
+        # def custom_linear_optimization_queue(individual):
+        #     return self.linear_optimization_queue(individual)
 
         solution = self.current_eat.optimize_linear(solution=self.current_optimization_data["solution"],
-                                                    function=custom_linear_optimization_queue)
+                                                    function=self.linear_optimization_queue)
 
         if self.debug:
             print("Solution linear optimized.")
@@ -548,7 +548,10 @@ class OptimizationManager:
                     indpb=self.current_optimization_data["parameters"]["indpb"],
                     cxpb=self.current_optimization_data["parameters"]["cxpb"],
                     mutpb=self.current_optimization_data["parameters"]["mutpb"],
-                    weights=self.get_weights()  # from self.optimization_data
+                    weights=self.get_weights(),  # from self.optimization_data
+                    maxf=self.current_optimization_data["parameter"].get("maxf"),
+                    xtol=self.current_optimization_data["parameter"].get("xtol"),
+                    ftol=self.current_optimization_data["parameter"].get("ftol")
                 )
                 self.current_oh = get_table_for_optimization_id(self.oh, self.current_optimization_id)
                 self.current_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)

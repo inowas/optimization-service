@@ -3,13 +3,13 @@ Here we build our evolutionary toolbox, that will help us to create an initial p
 populations based on the calculation results of an "old" finished population.
 """
 
-# Imports
 from typing import List, Tuple
 import numpy as np
 from deap import base, creator, tools, algorithms
 from copy import deepcopy
 from mystic.solvers import NelderMeadSimplexSolver
 from mystic.termination import CandidateRelativeTolerance as CRT
+from sklearn.cluster import Kmeans
 
 
 class EAToolbox:
@@ -19,7 +19,10 @@ class EAToolbox:
                  indpb: float,
                  cxpb: float,
                  mutpb: float,
-                 weights: Tuple[int, int]):
+                 weights: Tuple[int, int],
+                 maxf: int,
+                 xtol: float,
+                 ftol: float):
         # Usecase related parameters
         self.eta = eta
         self.bounds = bounds
@@ -29,6 +32,9 @@ class EAToolbox:
         self.cxpb = cxpb
         self.mutpb = mutpb
         self.weights = weights
+        self.maxf = maxf
+        self.xtol = xtol
+        self.ftol = ftol
         # Deap classes and methods
         self.fitness_class = base.Fitness
         self.mate_method = tools.cxSimulatedBinaryBounded
@@ -38,6 +44,8 @@ class EAToolbox:
         self.hall_of_fame = tools.ParetoFront()
         self.default_individual = None
         self.toolbox = None
+        # Others
+        self._diversity_ref_point = None
 
         # Create our default individual which is used by our toolbox
         self.build_default_individual()
@@ -81,6 +89,81 @@ class EAToolbox:
             individual.append(gen)
 
         return individual
+
+    # Author: Aybulat F
+    @staticmethod
+    def project_and_cluster(ncls, pop, weights):
+        """Implementation of the Project And Cluster algorithm proposed by Syndhya et al."""
+        fitnesses = np.array([ind.fitness.values for ind in pop])
+        fitnesses_reprojected = np.zeros(fitnesses.shape)
+        maxs = np.max(fitnesses, 0)
+        mins = np.min(fitnesses, 0)
+        worst_values = []
+        for i, weight in enumerate(weights):
+            if weight <= 0:
+                worst_values.append(maxs[i])
+            else:
+                worst_values.append(mins[i])
+        ws = np.array(worst_values) ** -1
+
+        for i, fitness in enumerate(fitnesses):
+            fitnesses_reprojected[i] = ((1 - np.dot(ws, fitness)) / np.dot(ws, ws)) * ws + fitness
+
+        # Applying K-means clustering
+        kmeans = KMeans(n_clusters=ncls, random_state=0).fit(fitnesses_reprojected)
+        cluster_labels = kmeans.labels_
+        centroids = kmeans.cluster_centers_
+
+        # Calculating cluster diversity index
+        Q_diversity = 0
+        for cluster_label, centroid in zip(np.unique(cluster_labels), centroids):
+            cluster_inds = [i for i, j in zip(pop, cluster_labels) if j == cluster_label]
+            sum_of_distances = 0
+            for ind in cluster_inds:
+                sum_of_distances += np.linalg.norm(centroid - ind.fitness.values)
+            Q_diversity += sum_of_distances / len(cluster_inds)
+
+        return Q_diversity, cluster_labels
+
+    @staticmethod
+    def diversity_enhanced_selection(pop, cluster_labels, mu, selection_method):
+        # Returns population with enhanced deversity
+        diverse_pop = []
+        cluster_pop_sorted = {}
+
+        for cluster in np.unique(cluster_labels):
+            cluster_inds = [i for i, j in zip(pop, cluster_labels) if j == cluster]
+            cluster_pop_sorted[cluster] = selection_method(cluster_inds, len(cluster_inds))
+
+        rank = 0
+        while len(diverse_pop) < mu:
+            for p in cluster_pop_sorted.values():
+                try:
+                    diverse_pop.append(p[rank])
+                except IndexError:
+                    pass
+                if len(diverse_pop) == mu:
+                    return diverse_pop
+            rank += 1
+
+        return diverse_pop
+
+    def check_diversity(self, pop, ncls, qbound, mu):
+        Q_diversity, cluster_labels = self.project_and_cluster(
+            ncls=ncls, pop=pop, weights=self.weights
+        )
+
+        if self._diversity_ref_point is not None and Q_diversity < self._diversity_ref_point:
+            pop = self.diversity_enhanced_selection(
+                pop=pop, cluster_labels=cluster_labels,
+                mu=mu, selection_method=self.toolbox.select
+            )
+        else:
+            pop = self.toolbox.select(pop, mu)
+
+        self._diversity_ref_point = qbound * Q_diversity
+
+        return pop
 
     def build_toolbox(self) -> None:
         """ Function to build our toolbox that mainly takes into account the parsed ga parameters from our upload
@@ -195,8 +278,8 @@ class EAToolbox:
 
         return population
 
-    @staticmethod
-    def optimize_linear(solution: List[float],
+    def optimize_linear(self,
+                        solution: List[float],
                         function) -> List[float]:
         """ Function to optimize one solution linear by using the mystic library
 
@@ -213,7 +296,9 @@ class EAToolbox:
 
         solver.SetInitialPoints(x0=solution)
 
-        solver.SetTermination(CRT())
+        solver.SetEvaluationLimits(generations=self.maxf)
+
+        solver.SetTermination(CRT(self.xtol, self.ftol))
 
         solver.Solve(function)
 
