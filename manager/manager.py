@@ -24,7 +24,7 @@ def scalarize_solution(solution):
 class OptimizationManager:
     def __init__(self,
                  session,
-                 ea_toolbox: EAToolbox,
+                 ea_toolbox,
                  optimization_task,
                  optimization_history,
                  calculation_task,
@@ -66,26 +66,26 @@ class OptimizationManager:
         self.current_oh = None
         self.current_ct = None
 
-    # @Aybulat Fatkhutdinov modified
+    # Author: Aybulat Fatkhutdinov; modified
     def apply_individual(self, individual):
         """Write individual values to variable template and return the filled template"""
-        optimization_data = copy.deepcopy(self.current_optimization_data)
+        data = copy.deepcopy(self.current_data)
         for ind_value, keys in zip(individual, self.current_variable_map):
             if keys[1] == 'position':
                 ind_value = int(ind_value)
 
             if keys[1] == 'concentration':
-                for object_ in optimization_data["objects"]:
+                for object_ in data["optimization"]["objects"]:
                     if object_['id'] == keys[0]:
                         object_[keys[1]][keys[2]][keys[3]]['result'] = ind_value
                         break
             else:
-                for object_ in optimization_data["objects"]:
+                for object_ in data["optimization"]["objects"]:
                     if object_['id'] == keys[0]:
                         object_[keys[1]][keys[2]]['result'] = ind_value
                         break
 
-        return optimization_data
+        return data
 
     # Authr: Aybulat Fatkhutdinov; modified
     def read_optimization_data(self,
@@ -106,7 +106,7 @@ class OptimizationManager:
         if optimization_data:
             optimization_data = optimization_data
         else:
-            optimization_data = self.current_optimization_data
+            optimization_data = self.current_data["optimization"]
 
         for object_ in optimization_data["objects"]:
             for parameter, value in object_.items():
@@ -168,14 +168,14 @@ class OptimizationManager:
             exit()
 
     @staticmethod
-    def create_unique_id() -> uuid4:
+    def create_unique_id() -> str:
         """ Function to create a unique id for calculation jobs
 
         Returns:
              unique id (uuid4) - a unique id to identify a calculation job
 
         """
-        return uuid4()
+        return str(uuid4())
 
     def get_weights(self) -> tuple:
         """ Function used to extract objectives from the json that holds the whole optimization task
@@ -186,9 +186,10 @@ class OptimizationManager:
         Returns:
              objectives (tuple of ints) - the objectives of each function as presented in the json
         """
-        return tuple(objective["weight"] for objective in self.current_optimization_data["objectives"])
+        return tuple(objective["weight"] for objective in self.data["optimization"]["objectives"])
 
-    def linear_scalarization(self, fitness):
+    def linear_scalarization(self,
+                             fitness: List[float]):
         scalar_fitness = 0
         for value, weight in zip(fitness, self.get_weights()):
             scalar_fitness += value * weight * -1
@@ -262,12 +263,6 @@ class OptimizationManager:
                 filter(self.current_ct.optimization_id == self.current_optimization_id,
                        self.current_ct.generation == generation,
                        self.current_ct.calculation_state == CALCULATION_FINISH).count()
-
-            # print(f"ID: {optimization_id}")
-            # print(f"Generation: {generation}")
-            # print(f"Calculation state: {CALCULATION_FINISH}")
-
-            # print(f"Current number of calculated individuals: {current_population}")
 
             if current_population == total_population:
                 break
@@ -375,7 +370,6 @@ class OptimizationManager:
     def remove_optimization_and_calculation_data(self) -> None:
         optimization_task = self.query_current_optimization_task()
 
-        Path(optimization_task.opt_filepath).unlink()
         Path(optimization_task.data_filepath).unlink()
 
         individual_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
@@ -396,24 +390,24 @@ class OptimizationManager:
             .filter(or_(self.ot.optimization_state == OPTIMIZATION_FINISH,
                         self.ot.optimization_state == OPTIMIZATION_ABORT)).all()
 
-        old_optimization_tasks = [task
-                                  for task in optimization_tasks
-                                  if ((now_date - datetime.strptime(task.publishing_date, DATE_FORMAT)).days >
-                                      MAX_STORING_TIME_OPTIMIZATION_TASKS)]
-
-        if old_optimization_tasks:
-            for task in old_optimization_tasks:
-                individual_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
-                individual_oh = get_table_for_optimization_id(self.oh, self.current_optimization_id)
-
-                Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
-
-                self.session.remove(task)
-                self.session.commit()
+        # old_optimization_tasks = [task
+        #                           for task in optimization_tasks
+        #                           if ((now_date - datetime.strptime(task.publishing_date, DATE_FORMAT)).days >
+        #                               MAX_STORING_TIME_OPTIMIZATION_TASKS)]
+        #
+        # if old_optimization_tasks:
+        #     for task in old_optimization_tasks:
+        #         individual_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
+        #         individual_oh = get_table_for_optimization_id(self.oh, self.current_optimization_id)
+        #
+        #         Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
+        #
+        #         self.session.remove(task)
+        #         self.session.commit()
 
     def manage_evolutionary_optimization(self):
-        number_of_generations = self.current_optimization_data["parameters"]["ngen"]
-        population_size = self.current_optimization_data["parameters"]["pop_size"]
+        number_of_generations = self.current_data["optimization"]["parameters"]["ngen"]
+        population_size = self.current_data["optimization"]["parameters"]["pop_size"]
 
         population = self.current_eat.make_population(population_size)
 
@@ -483,13 +477,13 @@ class OptimizationManager:
             if self.debug:
                 print("Generation selected.")
 
-        return self.current_eat.select_nth_of_hall_of_fame(self.current_optimization_data["number_of_solutions"])
+        return self.current_eat.select_nth_of_hall_of_fame(self.current_data["optimization"]["number_of_solutions"])
 
     def manage_linear_optimization(self):
         # def custom_linear_optimization_queue(individual):
         #     return self.linear_optimization_queue(individual)
 
-        solution = self.current_eat.optimize_linear(solution=self.current_optimization_data["solution"],
+        solution = self.current_eat.optimize_linear(solution=self.current_data["optimization"]["result"],
                                                     function=self.linear_optimization_queue)
 
         if self.debug:
@@ -502,9 +496,9 @@ class OptimizationManager:
         optimization_task = self.session.query(self.ot)\
             .filter(self.ot.optimization_id == self.current_optimization_id).first()
 
-        assert optimization_task.optimization_type in ["EO", "LO"], "Error: optimization_type is neither 'EO' nor 'LO'"
+        assert optimization_task.optimization_type in ["GA", "LO"], "Error: optimization_type is neither 'GA' nor 'LO'"
 
-        if optimization_task.optimization_type == "EO":
+        if optimization_task.optimization_type == "GA":
             return self.manage_evolutionary_optimization()
 
         if optimization_task.optimization_type == "LO":
@@ -535,7 +529,6 @@ class OptimizationManager:
 
                 # Set temporary attributes
                 self.current_data = load_json(new_optimization_task.data_filepath)
-                self.current_optimization_data = load_json(new_optimization_task.opt_filepath)
 
                 variable_map, variable_bounds, _ = self.read_optimization_data()
 
@@ -543,15 +536,9 @@ class OptimizationManager:
 
                 # Set temporary attributes2
                 self.current_eat = self.ea_toolbox(
-                    eta=self.current_optimization_data["parameters"]["eta"],
                     bounds=variable_bounds,
-                    indpb=self.current_optimization_data["parameters"]["indpb"],
-                    cxpb=self.current_optimization_data["parameters"]["cxpb"],
-                    mutpb=self.current_optimization_data["parameters"]["mutpb"],
                     weights=self.get_weights(),  # from self.optimization_data
-                    maxf=self.current_optimization_data["parameter"].get("maxf"),
-                    xtol=self.current_optimization_data["parameter"].get("xtol"),
-                    ftol=self.current_optimization_data["parameter"].get("ftol")
+                    parameters=self.current_data["optimization"]["parameters"]
                 )
                 self.current_oh = get_table_for_optimization_id(self.oh, self.current_optimization_id)
                 self.current_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)

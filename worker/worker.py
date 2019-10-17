@@ -8,12 +8,12 @@ import numpy as np
 from typing import Union, List
 
 from flopy_adapter_mapping import FLOPY_PACKAGENAME_TO_ADAPTER
-from InowasFlopyAdapter.InowasFlopyReadFitness import InowasFlopyReadFitness
-from InowasFlopyAdapter.InowasFlopyCalculationAdapter import InowasFlopyCalculationAdapter
+from .InowasFlopyAdapter.InowasFlopyReadFitness import InowasFlopyReadFitness
+from .InowasFlopyAdapter.InowasFlopyCalculationAdapter import InowasFlopyCalculationAdapter
 from helper_functions import load_json, write_json, get_table_for_optimization_id
 from db import Session
 from models import CalculationTask, OptimizationTask
-from numpy_function_mapping import STRING_TO_NUMPY_FUNCTION
+from .numpy_function_mapping import STRING_TO_NUMPY_FUNCTION
 from config import OPTIMIZATION_RUN, CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH, \
     OPTIMIZATION_TYPE_EVOLUTION, OPTIMIZATION_DATA
 
@@ -26,7 +26,6 @@ class ModflowModel:
                  version: str,
                  optimization_id: str,
                  data: dict,
-                 optimization_data: dict,
                  modelname: str = None,
                  modelpath: Union[str, Path] = None):
         if not isinstance(version, str):
@@ -35,8 +34,6 @@ class ModflowModel:
             raise TypeError("Error: 'optimization_id' is not of type string.")
         if not isinstance(data, dict):
             raise TypeError("Error: 'data' is not of type dict.")
-        if not isinstance(optimization_data, dict):
-            raise TypeError("Error: 'optimization_data' is not of type dict.")
         if not isinstance(modelname, str):
             raise TypeError("Error: 'modelname' is not of type string.")
         if not isinstance(modelpath, (str, Path)):
@@ -45,38 +42,37 @@ class ModflowModel:
         self.version = version
         self.optimization_id = optimization_id
         self.data = data
-        self.optimization_data = optimization_data
 
-        if "mf" in data["mf"]:
+        if "mf" in data["data"]["mf"]:
             model_type = "mf"
-        elif "mt" in data["mf"]:
+        elif "mt" in data["data"]["mf"]:
             model_type = "mt"
         else:
             model_type = None
 
         if modelname:
-            data["mf"][model_type]["modelname"] = modelname
+            data["data"]["mf"][model_type]["modelname"] = modelname
 
         if modelpath:
-            data["mf"][model_type]["model_ws"] = modelpath
+            data["data"]["mf"][model_type]["model_ws"] = modelpath
 
         self._model = None
 
         self.combine_data_with_optimization_data()
 
     def combine_data_with_optimization_data(self):
-        for obj in self.optimization_data:
+        for obj in self.data["optimization"]:
             obj_type = obj["type"]
             obj_position = obj["position"]
 
-            if obj_type not in self.data["mf"]:
-                self.data["mf"][obj_type] = FLOPY_PACKAGENAME_TO_ADAPTER[obj_type]
+            if obj_type not in self.data["data"]["mf"]:
+                self.data["data"]["mf"][obj_type] = FLOPY_PACKAGENAME_TO_ADAPTER[obj_type]
 
             # todo include other objects and use specific packages for the case of more parameters
 
             if obj_type == "Wel":
-                if not self.data["mf"][obj_type]["stress_period_data"]:
-                    self.data["mf"][obj_type]["stress_period_data"] = {}
+                if not self.data["data"]["mf"][obj_type]["stress_period_data"]:
+                    self.data["data"]["mf"][obj_type]["stress_period_data"] = {}
 
                 for period, flux in obj["flux"].items():
                     period_flux = [obj_position["lay"],
@@ -85,25 +81,25 @@ class ModflowModel:
                                    flux]
 
                     added_flux_to_existing = False
-                    for i, existing_flux in enumerate(self.data["mf"][obj_type]["stress_period_data"][period]):
+                    for i, existing_flux in enumerate(self.data["data"]["mf"][obj_type]["stress_period_data"][period]):
                         if existing_flux[:3] == period_flux[:3]:
                             existing_flux[3] += period_flux[3]
-                            self.data["mf"][obj_type]["stress_period_data"][period][i] = existing_flux
+                            self.data["data"]["mf"][obj_type]["stress_period_data"][period][i] = existing_flux
                             added_flux_to_existing = True
                             break
 
                     if not added_flux_to_existing:
-                        self.data["mf"][obj_type]["stress_period_data"][period].append(period_flux)
+                        self.data["data"]["mf"][obj_type]["stress_period_data"][period].append(period_flux)
 
     def run(self):
         flopy_calculation = InowasFlopyCalculationAdapter(self.version,
-                                                          self.data,
+                                                          self.data["data"],
                                                           self.optimization_id)
 
         self._model = flopy_calculation.get_model()
 
     def evaluate(self):
-        flopy_evaluation = InowasFlopyReadFitness(self.optimization_data, self._model)
+        flopy_evaluation = InowasFlopyReadFitness(self.data["optimization_data"], self._model)
 
         return flopy_evaluation.get_fitness()
 
@@ -169,15 +165,12 @@ class WorkerManager:
                     new_calculation_task.calculation_state = CALCULATION_RUN
                     self.session.commit()
 
-                    data = load_json(new_calculation_task.data_filepath)
-                    # optimization_data = load_json(new_calculation_task.optimization_filepath)
                     calculation_data = load_json(new_calculation_task.calcinput_filepath)
 
                     # Build model
-                    modflowmodel = ModflowModel(version=new_calculation_task.version,
+                    modflowmodel = ModflowModel(version=calculation_data.get("version"),
                                                 optimization_id=self.current_optimization_id,
-                                                data=data,
-                                                optimization_data=calculation_data,
+                                                data=calculation_data,
                                                 modelname=self.current_calculation_id,
                                                 modelpath=Path(OPTIMIZATION_DATA,
                                                                self.current_optimization_id,

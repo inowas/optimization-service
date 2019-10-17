@@ -35,7 +35,7 @@ def write_json(obj: dict,
 
 
 def get_table_for_optimization_id(table_class,
-                                  optimization_id):
+                                  optimization_id: str):
     base = declarative_base()
 
     # IndividualTaskTable.__tablename__ = f"{table_class.__name__.lower()}_{optimization_id}"

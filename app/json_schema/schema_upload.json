@@ -23,9 +23,9 @@
           "type": "object",
           "properties": {
             "method": {
-              "description": "Type of optimization; either EO (evolutionary optimization) or LO (linear optimization).",
+              "description": "Type of optimization; either GA (genetic algorithm) or LO (linear optimization).",
               "type": "string",
-              "enum": ["EO", "LO"]
+              "enum": ["GA", "LO"]
             },
             "ngen": {
               "description": "Number of generations of GA",
@@ -56,9 +56,26 @@
               "type": "number",
               "minimum": 0,
               "maximum": 1
+            },
+            "diversity_flg": {
+              "description": "Bool if diversity of solutions should be checked to make it more diverse and cover the whole area",
+              "type": "boolean"
+            },
+            "ncls": {
+              "description": "Number of clusters that should be used.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxf": {
+              "description": "Independent probability for mutation that's adds to mutpb",
+              "type": "integer"
+            },
+            "qbound": {
+              "description": "Independent probability for mutation that's adds to mutpb",
+              "type": "number"
             }
           },
-          "required": ["method","ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb"],
+          "required": ["method","ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb", "diversity_flg", "ncls", "maxf", "qbound"],
           "additionalProperties": false
         },
         "number_of_solutions": {

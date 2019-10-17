@@ -33,7 +33,7 @@
             "method": {
               "description": "Type of optimization; either EO (evolutionary optimization) or LO (linear optimization).",
               "type": "string",
-              "enum": ["EO", "LO"]
+              "enum": ["GA", "LO"]
             },
             "ngen": {
               "description": "Number of generations of GA",

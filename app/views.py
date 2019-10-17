@@ -54,20 +54,15 @@ def upload_file() -> jsonify:
         project = request_data.get("project", "unknown")
         optimization_id = request_data["optimization_id"]
         optimization_state = request_data["type"]
-        # calculation_id
-        # model_id
 
-        optimization = request_data["optimization"]
-        data = request_data["data"]
-
-        method = optimization["parameters"]["method"]
-        population_size = optimization["parameters"]["pop_size"]
-        total_generation = optimization["parameters"]["ngen"]
+        method = request_data["optimization"]["parameters"]["method"]
+        population_size = request_data["optimization"]["parameters"]["pop_size"]
+        total_generation = request_data["optimization"]["parameters"]["ngen"]
 
         # Create folder named after task_id in optimization_data folder
-        opt_filepath, data_filepath = create_input_and_output_filepath(folder=OPTIMIZATION_DATA,
-                                                                       task_id=optimization_id,
-                                                                       file_types=[OPTIMIZATION_FILE, DATA_FILE])
+        data_filepath = create_input_and_output_filepath(folder=OPTIMIZATION_DATA,
+                                                         task_id=optimization_id,
+                                                         file_types=[DATA_FILE])[0]
 
         optimizationtask = OptimizationTask(
                                 author=author,
@@ -78,15 +73,11 @@ def upload_file() -> jsonify:
                                 total_population=population_size,
                                 total_generation=total_generation,
                                 solution=dict(),
-                                opt_filepath=opt_filepath,
                                 data_filepath=data_filepath
                             )
 
         try:
-            write_json(obj=optimization,
-                       filepath=opt_filepath)
-
-            write_json(obj=data,
+            write_json(obj=request_data,
                        filepath=data_filepath)
 
             Session.add(optimizationtask)
@@ -96,7 +87,7 @@ def upload_file() -> jsonify:
             rmtree(Path(OPTIMIZATION_DATA, optimization_id))
             # Path(opt_filepath).unlink()
             #
-            # Path(data_filepath).unlink()
+            Path(data_filepath).unlink()
 
             Session.rollback()
 
@@ -121,7 +112,7 @@ def show_all_optimizations():
 
         optimization_tasks_df = pd.read_sql(optimization_tasks, Session.bind)
 
-        optimization_tasks_df = optimization_tasks_df.drop(["opt_filepath", "data_filepath"], axis=1)
+        optimization_tasks_df = optimization_tasks_df.drop(["data_filepath"], axis=1)
 
         return optimization_tasks_df.to_html()
 
