@@ -43,7 +43,6 @@ class OptimizationManager:
         self.current_optimization_id = None
 
         self.current_data = None
-        self.current_optimization_data = None
         self.current_variable_map = None
 
         self.current_eat = None
@@ -186,7 +185,7 @@ class OptimizationManager:
         Returns:
              objectives (tuple of ints) - the objectives of each function as presented in the json
         """
-        return tuple(objective["weight"] for objective in self.data["optimization"]["objectives"])
+        return tuple(objective["weight"] for objective in self.current_data["optimization"]["objectives"])
 
     def linear_scalarization(self,
                              fitness: List[float]):

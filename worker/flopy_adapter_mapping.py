@@ -30,5 +30,5 @@ FLOPY_PACKAGENAME_TO_ADAPTER = {
     "Uzt": InowasFlopyAdapter.UztAdapter,
     "Vdf": InowasFlopyAdapter.VdfAdapter,
     "Vsc": InowasFlopyAdapter.VscAdapter,
-    "Wel": InowasFlopyAdapter.WelAdapter,
+    "Well": InowasFlopyAdapter.WelAdapter,
 }

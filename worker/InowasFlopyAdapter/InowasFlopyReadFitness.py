@@ -20,9 +20,9 @@ class InowasFlopyReadFitness:
 
         self.optimization_data = optimization_data
 
-        self.dis_package = flopy_adapter._mf.get_package('DIS')
-        self.model_ws = flopy_adapter._mf.model_ws
-        self.model_name = flopy_adapter._mf.namefile.split('.')[0]
+        self.dis_package = flopy_adapter.get_package('DIS')  # _mf.
+        self.model_ws = flopy_adapter.model_ws  # _mf.
+        self.model_name = flopy_adapter.namefile.split('.')[0]  # _mf.
         self.objects = self.optimization_data['objects']
 
         objectives_values = self.read_objectives()
@@ -38,7 +38,7 @@ class InowasFlopyReadFitness:
         return self.fitness
 
     def read_objectives(self):
-        """Returnes fitnes list"""
+        """Returns fitness list"""
         fitness = []
 
         for objective in self.optimization_data["objectives"]:
@@ -61,6 +61,9 @@ class InowasFlopyReadFitness:
 
             elif objective["type"] == "input_concentration":
                 value = self.read_input_concentration(objective, self.objects)
+
+            # if not value:
+            #     print(f"Error: could not read objective for {objective['type']}.")
             
             value = self.summary(value, objective["summary_method"])
             fitness.append(value.item())
@@ -161,6 +164,7 @@ class InowasFlopyReadFitness:
         print(f'Read concentration values at location: {data["location"]}')
 
         try:
+            print(os.path.join(model_ws, data["conc_file_name"]))
             conc_file_object = flopy.utils.UcnFile(
                 os.path.join(model_ws, data["conc_file_name"]))
             conc = conc_file_object.get_alldata(
@@ -171,7 +175,7 @@ class InowasFlopyReadFitness:
             conc_file_object.close()
         
         except:
-            print('Concentrations file of the model: {model_name} could not be opened')
+            print(f'Concentrations file of the model: {model_name} could not be opened')
             return None
 
         return conc
