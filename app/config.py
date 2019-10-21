@@ -42,7 +42,7 @@ CALCULATION_FINISH = "calculation_finish"
 CALCULATION_ABORT = "calculation_abort"
 
 # Initial fitness (should be really bad)
-INITIAL_SCALAR_FITNESS = -999.0
+INITIAL_SCALAR_FITNESS = 999.0
 
 OPTIMIZATION_TYPE_EVOLUTION = "GA"
 OPTIMIZATION_TYPE_LINEAR = "LO"

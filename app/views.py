@@ -93,7 +93,7 @@ def upload_file() -> jsonify:
 
             return abort(400, "Error: task couldn't be created!")
 
-        return redirect(f"/optimization/{optimization_id}")
+        return redirect(f"/optimization")  # /{optimization_id}
 
     if request.method == 'GET':
         if request.content_type == "application/json":

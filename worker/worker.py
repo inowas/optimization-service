@@ -3,17 +3,18 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
 from pathlib import Path
-import flopy
+# import flopy
 import numpy as np
 from typing import Union, List
 
-from flopy_adapter_mapping import FLOPY_PACKAGENAME_TO_ADAPTER
+from mapping.flopy_adapter_mapping import FLOPY_PACKAGENAME_TO_ADAPTER
+from mapping.numpy_function_mapping import STRING_TO_NUMPY_FUNCTION
+from mapping.object_to_package_mapping import OBJECT_TO_PACKAGE_MAPPER
 from InowasFlopyAdapter.InowasFlopyReadFitness import InowasFlopyReadFitness
 from InowasFlopyAdapter.InowasFlopyCalculationAdapter import InowasFlopyCalculationAdapter
 from helper_functions import load_json, write_json, get_table_for_optimization_id
 from db import Session
 from models import CalculationTask, OptimizationTask
-from numpy_function_mapping import STRING_TO_NUMPY_FUNCTION
 from config import OPTIMIZATION_RUN, CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH, \
     OPTIMIZATION_TYPE_EVOLUTION, OPTIMIZATION_DATA
 
@@ -43,59 +44,73 @@ class ModflowModel:
         self.optimization_id = optimization_id
         self.calculation_data = calculation_data
 
-        if "mf" in self.calculation_data["data"]["mf"]:
+        if "mf" in self.calculation_data["data"]:
             model_type = "mf"
-        elif "mt" in self.calculation_data["data"]["mf"]:
+        elif "mt" in self.calculation_data["data"]:
             model_type = "mt"
         else:
             model_type = None
 
         if modelname:
-            self.calculation_data["data"]["mf"][model_type]["modelname"] = modelname
+            self.calculation_data["data"][model_type][model_type]["modelname"] = modelname
 
         if modelpath:
-            self.calculation_data["data"]["mf"][model_type]["model_ws"] = modelpath
+            self.calculation_data["data"][model_type][model_type]["model_ws"] = modelpath
 
         self._model = None
+        self._success = None
 
         self.combine_data_with_optimization_data()
 
     def combine_data_with_optimization_data(self):
+        # Set modflow data path
+        data_mf = self.calculation_data["data"]["mf"]
+
         for obj in self.calculation_data["optimization"]["objects"]:
             obj_type = obj["type"]
             obj_position = obj["position"]
 
-            if obj_type not in self.calculation_data["data"]["mf"]:
+            if obj_type not in data_mf:
                 obj_adapter = FLOPY_PACKAGENAME_TO_ADAPTER[obj_type.capitalize()]
-                self.calculation_data["data"]["mf"][obj_type] = obj_adapter.default()
+                data_mf[obj_type] = obj_adapter.default()
 
             # todo include other objects and use specific packages for the case of more parameters
 
             if obj_type == "well":
-                package_type = "wel"
-                if not self.calculation_data["data"]["mf"][obj_type]["stress_period_data"]:
-                    self.calculation_data["data"]["mf"][obj_type]["stress_period_data"] = {}
-a
-                    if period not in self.calculation_data["data"]["mf"][package_type]["stress_period_data"]:
-                        self.calculation_data["data"]["mf"][package_type]["stress_period_data"][period] = []
+                package_type = OBJECT_TO_PACKAGE_MAPPER["well"]
 
-                    added_flux_to_existing = False
-                    for i, existing_flux in enumerate(self.calculation_data["data"]["mf"][package_type]["stress_period_data"][period]):
-                        if existing_flux[:3] == period_flux[:3]:
-s                            self.calculation_data["data"]["mf"][package_type]["stress_period_data"][period][i] = existing_flux
-faa                            break
+                if not data_mf[obj_type]["stress_period_data"]:
+                    data_mf[obj_type]["stress_period_data"] = {}
 
-                    if not added_flux_to_existing:
-                        self.calculation_data["data"]["mf"][package_type]["stress_period_data"][period].append(period_flux)
+                for period, obj_flux in obj["flux"].items():
+                    period_flux = [obj_position["lay"]["result"],
+                                   obj_position["row"]["result"],
+                                   obj_position["col"]["result"],
+                                   obj_flux["result"]]
+
+                    if period not in data_mf[package_type]["stress_period_data"]:
+                        data_mf[package_type]["stress_period_data"][period] = []
+
+                    same_position_flux = [existing_flux
+                                          for existing_flux in data_mf[package_type]["stress_period_data"][period]
+                                          if existing_flux[:3] == period_flux[:3]]
+
+                    if same_position_flux:
+                        same_position_flux[0][3] += period_flux[3]
+                        continue
+
+                    data_mf[package_type]["stress_period_data"][period].append(period_flux)
 
     def run(self):
         flopy_calculation = InowasFlopyCalculationAdapter(self.version,
                                                           self.calculation_data["data"],
                                                           self.optimization_id)
 
-        self._model = flopy_calculation.get_model()
+        self._model, self._success = flopy_calculation.get_model_and_fitness()
 
     def evaluate(self):
+        if not self._success:
+            return 999
         flopy_evaluation = InowasFlopyReadFitness(self.calculation_data["optimization"], self._model)
 
         return flopy_evaluation.get_fitness()

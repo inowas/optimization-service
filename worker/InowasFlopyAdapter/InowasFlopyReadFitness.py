@@ -5,10 +5,11 @@ Author: Aybulat Fatkhutdinov
 """
 
 import os
+import pathlib
 import math
 import numpy as np
-import flopy
 from typing import Union
+import flopy
 
 
 class InowasFlopyReadFitness:
@@ -16,7 +17,7 @@ class InowasFlopyReadFitness:
 
     def __init__(self,
                  optimization_data: dict,
-                 flopy_adapter: Union[flopy.modflow.mf.Modflow, flopy.mt3d.mt.Mt3dms]):
+                 flopy_adapter):
 
         self.optimization_data = optimization_data
 
@@ -142,8 +143,13 @@ class InowasFlopyReadFitness:
         print(f'Read head values at location: {data["location"]}')
         
         try:
+            print(f"{pathlib.Path(model_ws, model_name)}.hds")
+
             head_file_object = flopy.utils.HeadFile(
-                os.path.join(model_ws, model_name) + '.hds')
+                f"{pathlib.Path(model_ws, model_name)}.hds", verbose=True)
+
+            print("Read head.")
+
             head = head_file_object.get_alldata(
                 nodata=-9999
                 )
@@ -152,6 +158,8 @@ class InowasFlopyReadFitness:
             head_file_object.close()
 
             return head
+        except FileNotFoundError:
+            print(f'Head file of the model: {model_name} not found')
         except:
             print(f'Head file of the model: {model_name} could not be opened')
 
