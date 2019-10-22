@@ -43,6 +43,8 @@ class WelAdapter:
 
     def get_package(self, _mf):
         content = self.merge()
+        print(content)
+
         return mf.ModflowWel(
             _mf,
             **content

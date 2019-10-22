@@ -9,7 +9,6 @@ services:
     volumes:
       - ./app:/app
       - ./optimization-data:/optimization-data
-      - ./calculation-data:/calculation-data
 
   postgres:
     image: postgres
@@ -29,7 +28,6 @@ services:
       - ./manager:/app
       - ./app:/app/opt_app
       - ./optimization-data:/optimization-data
-      - ./calculation-data:/calculation-data
     command: ["python", "-u", "manager.py"]
 
   worker:
@@ -39,7 +37,6 @@ services:
       - ./worker:/app
       - ./app:/app/opt_app
       - ./optimization-data:/optimization-data
-      - ./calculation-data:/calculation-data
     command: ["python", "-u", "worker.py"]
 
 volumes:

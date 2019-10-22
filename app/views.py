@@ -9,13 +9,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
 from helper_functions import get_table_for_optimization_id
-# from IPython.display import HTML
-# from IPython.display import HTML
+from shutil import rmtree
 
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from db import Session
 from models import OptimizationTask, OptimizationHistory
-from config import OPTIMIZATION_FILE, DATA_FILE, JSON_SCHEMA_UPLOAD, OPTIMIZATION_RUN
+from config import DATA_FILE, JSON_SCHEMA_MODFLOW_OPTIMIZATION, OPTIMIZATION_RUN, OPTIMIZATION_DATA
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -33,7 +32,7 @@ def upload_file() -> jsonify:
         file_upload = request.files["file"]
         request_data = json.load(file_upload)
 
-        schema_upload = load_json(JSON_SCHEMA_UPLOAD)
+        schema_upload = load_json(JSON_SCHEMA_MODFLOW_OPTIMIZATION)
 
         try:
             validate(instance=request_data,
@@ -55,18 +54,15 @@ def upload_file() -> jsonify:
         project = request_data.get("project", "unknown")
         optimization_id = request_data["optimization_id"]
         optimization_state = request_data["type"]
-        # calculation_id
-        # model_id
 
-        optimization = request_data["optimization"]
-        data = request_data["data"]
+        method = request_data["optimization"]["parameters"]["method"]
+        population_size = request_data["optimization"]["parameters"]["pop_size"]
+        total_generation = request_data["optimization"]["parameters"]["ngen"]
 
-        method = optimization["parameters"]["method"]
-        population_size = optimization["parameters"]["pop_size"]
-        total_generation = optimization["parameters"]["ngen"]
-
-        opt_filepath, data_filepath = create_input_and_output_filepath(task_id=optimization_id,
-                                                                       extensions=[OPTIMIZATION_FILE, DATA_FILE])
+        # Create folder named after task_id in optimization_data folder
+        data_filepath = create_input_and_output_filepath(folder=OPTIMIZATION_DATA,
+                                                         task_id=optimization_id,
+                                                         file_types=[DATA_FILE])[0]
 
         optimizationtask = OptimizationTask(
                                 author=author,
@@ -77,30 +73,27 @@ def upload_file() -> jsonify:
                                 total_population=population_size,
                                 total_generation=total_generation,
                                 solution=dict(),
-                                opt_filepath=opt_filepath,
                                 data_filepath=data_filepath
                             )
 
         try:
-            write_json(obj=optimization,
-                       filepath=opt_filepath)
-
-            write_json(obj=data,
+            write_json(obj=request_data,
                        filepath=data_filepath)
 
             Session.add(optimizationtask)
 
             Session.commit()
         except (UnicodeDecodeError, IOError):
-            Path(opt_filepath).unlink()
-
+            rmtree(Path(OPTIMIZATION_DATA, optimization_id))
+            # Path(opt_filepath).unlink()
+            #
             Path(data_filepath).unlink()
 
             Session.rollback()
 
             return abort(400, "Error: task couldn't be created!")
 
-        return redirect(f"/optimization/{optimization_id}")
+        return redirect(f"/optimization")  # /{optimization_id}
 
     if request.method == 'GET':
         if request.content_type == "application/json":
@@ -119,7 +112,7 @@ def show_all_optimizations():
 
         optimization_tasks_df = pd.read_sql(optimization_tasks, Session.bind)
 
-        optimization_tasks_df = optimization_tasks_df.drop(["opt_filepath", "data_filepath"], axis=1)
+        optimization_tasks_df = optimization_tasks_df.drop(["data_filepath"], axis=1)
 
         return optimization_tasks_df.to_html()
 
@@ -179,6 +172,6 @@ def show_single_optimization_progress(optimization_id_):
 
             return abort(404, f"Optimization with id {optimization_id_} isn't running. Progress graph not available!")
 
-        return abort(404, f"Optimization with id {optimization_id_} doesn't exist.")
+        return abort(404, f"Optimization with id {optimization_id_} does not exist.")
 
     pass

@@ -18,35 +18,10 @@
       "diversity_flg": true,
       "ncls": 3,
       "maxf": 10,
-      "qbound": 0.25
+      "qbound": 0.25,
+      "number_of_solutions": 3
     },
     "objectives": [
-      {
-        "type": "concentration",
-        "conc_file_name": "MT3D001.UCN",
-        "summary_method": "max",
-        "weight": -1,
-        "penalty_value": 999,
-        "location": {
-          "type": "bbox",
-          "ts": [
-            0,
-            9
-          ],
-          "lay": [
-            0,
-            0
-          ],
-          "row": [
-            45,
-            45
-          ],
-          "col": [
-            45,
-            45
-          ]
-        }
-      },
       {
         "type": "head",
         "summary_method": "max",
@@ -63,8 +38,8 @@
             0
           ],
           "row": [
-            45,
-            45
+            20,
+            20
           ],
           "col": [
             45,
@@ -73,34 +48,7 @@
         }
       }
     ],
-    "constraints": [
-      {
-        "type": "concentration",
-        "conc_file_name": "MT3D001.UCN",
-        "summary_method": "max",
-        "operator": "less",
-        "value": 2,
-        "location": {
-          "type": "bbox",
-          "ts": [
-            0,
-            9
-          ],
-          "lay": [
-            0,
-            0
-          ],
-          "row": [
-            45,
-            45
-          ],
-          "col": [
-            45,
-            45
-          ]
-        }
-      }
-    ],
+    "constraints": [],
     "objects": [
       {
         "id": 0,
@@ -108,11 +56,11 @@
         "position": {
           "row": {
             "min": 10,
-            "max": 80
+            "max": 39
           },
           "col": {
             "min": 10,
-            "max": 80
+            "max": 74
           },
           "lay": {
             "min": 0,
@@ -123,104 +71,6 @@
           "0": {
             "min": 1000,
             "max": 1000
-          },
-          "1": {
-            "min": 1000,
-            "max": 1000
-          },
-          "2": {
-            "min": 1000,
-            "max": 1000
-          },
-          "3": {
-            "min": 1000,
-            "max": 1000
-          },
-          "4": {
-            "min": 1000,
-            "max": 1000
-          },
-          "5": {
-            "min": 1000,
-            "max": 1000
-          },
-          "6": {
-            "min": 1000,
-            "max": 1000
-          },
-          "7": {
-            "min": 1000,
-            "max": 1000
-          },
-          "8": {
-            "min": 1000,
-            "max": 1000
-          },
-          "9": {
-            "min": 1000,
-            "max": 1000
-          }
-        },
-        "concentration": {
-          "0": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "1": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "2": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "3": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "4": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "5": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "6": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "7": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "8": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "9": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
           }
         }
       },
@@ -230,11 +80,11 @@
         "position": {
           "row": {
             "min": 10,
-            "max": 80
+            "max": 39
           },
           "col": {
             "min": 10,
-            "max": 80
+            "max": 74
           },
           "lay": {
             "min": 0,
@@ -245,104 +95,6 @@
           "0": {
             "min": 1000,
             "max": 1000
-          },
-          "1": {
-            "min": 1000,
-            "max": 1000
-          },
-          "2": {
-            "min": 1000,
-            "max": 1000
-          },
-          "3": {
-            "min": 1000,
-            "max": 1000
-          },
-          "4": {
-            "min": 1000,
-            "max": 1000
-          },
-          "5": {
-            "min": 1000,
-            "max": 1000
-          },
-          "6": {
-            "min": 1000,
-            "max": 1000
-          },
-          "7": {
-            "min": 1000,
-            "max": 1000
-          },
-          "8": {
-            "min": 1000,
-            "max": 1000
-          },
-          "9": {
-            "min": 1000,
-            "max": 1000
-          }
-        },
-        "concentration": {
-          "0": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "1": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "2": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "3": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "4": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "5": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "6": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "7": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "8": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
-          },
-          "9": {
-            "component1": {
-              "min": 1,
-              "max": 1
-            }
           }
         }
       }
