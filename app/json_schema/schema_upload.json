@@ -76,7 +76,7 @@
             }
           },
           "required": ["method","ngen", "pop_size", "mutpb", "cxpb", "eta", "indpb", "diversity_flg", "ncls", "maxf", "qbound"],
-          "additionalProperties": false
+          "additionalProperties": true
         },
         "number_of_solutions": {
           "description": "number of solutions that should be reported back to the customer",

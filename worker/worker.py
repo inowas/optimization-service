@@ -106,11 +106,11 @@ class ModflowModel:
                                                           self.calculation_data["data"],
                                                           self.optimization_id)
 
-        self._model, self._success = flopy_calculation.get_model_and_fitness()
+        self._model, self._success = flopy_calculation.get_model_and_success()
 
     def evaluate(self):
-        if not self._success:
-            return 999
+        # if not self._success:
+        #     return [999.0]
         flopy_evaluation = InowasFlopyReadFitness(self.calculation_data["optimization"], self._model)
 
         return flopy_evaluation.get_fitness()
@@ -168,29 +168,25 @@ class WorkerManager:
                 new_calculation_task = self.query_first_starting_calculation_task()
 
                 if new_calculation_task:
-                    self.current_calculation_id = new_calculation_task.calculation_id
-
-                    # calculation_task = self.query_calculation_task_with_id(ct_table=ct_table,
-                    #                                                        calculation_id=calculation_id)
-                    # print(f"Working on task with id: {calculation_id}")
-
                     new_calculation_task.calculation_state = CALCULATION_RUN
                     self.session.commit()
+
+                    self.current_calculation_id = new_calculation_task.calculation_id
 
                     calculation_data = load_json(new_calculation_task.calcinput_filepath)
 
                     # Build model
-                    modflowmodel = ModflowModel(version=calculation_data.get("version"),
-                                                optimization_id=self.current_optimization_id,
-                                                calculation_data=calculation_data,
-                                                modelname=self.current_calculation_id,
-                                                modelpath=Path(OPTIMIZATION_DATA,
-                                                               self.current_optimization_id,
-                                                               self.current_calculation_id))
+                    modflow_model = ModflowModel(version=calculation_data.get("version"),
+                                                 optimization_id=self.current_optimization_id,
+                                                 calculation_data=calculation_data,
+                                                 modelname=self.current_calculation_id,
+                                                 modelpath=Path(OPTIMIZATION_DATA,
+                                                                self.current_optimization_id,
+                                                                self.current_calculation_id))
 
-                    modflowmodel.run()
+                    modflow_model.run()
 
-                    fitness = modflowmodel.evaluate()
+                    fitness = modflow_model.evaluate()
 
                     data_output = {"fitness": fitness}
 

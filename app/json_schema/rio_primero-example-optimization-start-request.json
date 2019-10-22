@@ -18,7 +18,8 @@
       "diversity_flg": true,
       "ncls": 3,
       "maxf": 10,
-      "qbound": 0.25
+      "qbound": 0.25,
+      "number_of_solutions": 3
     },
     "objectives": [
       {
@@ -37,8 +38,8 @@
             0
           ],
           "row": [
-            45,
-            45
+            20,
+            20
           ],
           "col": [
             45,
@@ -55,11 +56,11 @@
         "position": {
           "row": {
             "min": 10,
-            "max": 80
+            "max": 39
           },
           "col": {
             "min": 10,
-            "max": 80
+            "max": 74
           },
           "lay": {
             "min": 0,
@@ -79,11 +80,11 @@
         "position": {
           "row": {
             "min": 10,
-            "max": 80
+            "max": 39
           },
           "col": {
             "min": 10,
-            "max": 80
+            "max": 74
           },
           "lay": {
             "min": 0,

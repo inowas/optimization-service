@@ -150,12 +150,12 @@ class EAToolbox:
 
         """
         population = []
-        for ind, fitness in individuals, fitnesses:
+        for ind, fitness in zip(individuals, fitnesses):
             individual = self.default_individual()
 
             individual.extend(ind)
 
-            individual.fitness.values = tuple(fitness)
+            individual.fitness.values = tuple([fitness])
 
             population.append(individual)
 
@@ -267,18 +267,18 @@ class EAToolbox:
         )
 
         if self._diversity_ref_point is not None and Q_diversity < self._diversity_ref_point:
-            pop = self.diversity_enhanced_selection(
+            population = self.diversity_enhanced_selection(
                 pop=pop, cluster_labels=cluster_labels,
                 mu=mu, selection_method=self.toolbox.select
             )
         else:
-            pop = self.select_best_individuals(self.pop_size)
+            population = self.select_best_individuals(pop)
 
         # self.toolbox.select(pop, mu)
 
         self._diversity_ref_point = qbound * Q_diversity
 
-        return pop
+        return population
 
     # Author: Aybulat Fatkhutdinov
     def generate_offspring(self,

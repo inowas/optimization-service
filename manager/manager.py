@@ -4,17 +4,18 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
 from datetime import datetime
+import pandas as pd
 from pathlib import Path
 from uuid import uuid4
-from sqlalchemy import cast, Date, or_
-from typing import Dict, Union, Tuple, List, Optional
+from sqlalchemy import or_
+from typing import Tuple, List, Optional
 from helper_functions import create_input_and_output_filepath, load_json, write_json, get_table_for_optimization_id
 from evolutionary_toolbox import EAToolbox
 from db import Session, engine
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory
 from config import OPTIMIZATION_DATA
 from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
-    CALCULATION_FINISH, OPTIMIZATION_FINISH, MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, DATE_FORMAT
+    CALCULATION_FINISH, OPTIMIZATION_FINISH, MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT
 
 
 def scalarize_solution(solution):
@@ -389,20 +390,20 @@ class OptimizationManager:
             .filter(or_(self.ot.optimization_state == OPTIMIZATION_FINISH,
                         self.ot.optimization_state == OPTIMIZATION_ABORT)).all()
 
-        # old_optimization_tasks = [task
-        #                           for task in optimization_tasks
-        #                           if ((now_date - datetime.strptime(task.publishing_date, DATE_FORMAT)).days >
-        #                               MAX_STORING_TIME_OPTIMIZATION_TASKS)]
-        #
-        # if old_optimization_tasks:
-        #     for task in old_optimization_tasks:
-        #         individual_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
-        #         individual_oh = get_table_for_optimization_id(self.oh, self.current_optimization_id)
-        #
-        #         Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
-        #
-        #         self.session.remove(task)
-        #         self.session.commit()
+        old_optimization_tasks = [task
+                                  for task in optimization_tasks
+                                  if ((now_date - pd.to_datetime(task.publishing_date).date()).days >
+                                      MAX_STORING_TIME_OPTIMIZATION_TASKS)]
+
+        if old_optimization_tasks:
+            for task in old_optimization_tasks:
+                individual_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
+                individual_oh = get_table_for_optimization_id(self.oh, self.current_optimization_id)
+
+                Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
+
+                self.session.remove(task)
+                self.session.commit()
 
     def manage_evolutionary_optimization(self):
         number_of_generations = self.current_data["optimization"]["parameters"]["ngen"]
@@ -424,7 +425,7 @@ class OptimizationManager:
                 summarized_calculation_data, summarized_fitness = self.summarize_finished_calculation_tasks(
                     generation=(generation - 1))
 
-                individuals = [self.read_optimization_data(single_calculation["optimization"])
+                individuals = [self.read_optimization_data(single_calculation["optimization"])[2]
                                for single_calculation in summarized_calculation_data]
 
                 fitnesses = [self.linear_scalarization(single_fitness)
@@ -433,33 +434,42 @@ class OptimizationManager:
                 if self.debug:
                     print(f"Individuals summarized.")
 
-                population = self.current_eat.optimize_evolutionary(individuals=individuals, fitnesses=fitnesses)
+                population = self.current_eat.optimize_evolutionary(individuals, fitnesses)
 
                 if self.debug:
                     print(f"Population developed.")
 
-            self.create_new_calculation_jobs(generation=generation,
-                                             population=population)
+            self.create_new_calculation_jobs(generation, population)
 
             if self.debug:
                 print(f"New jobs created.")
 
-            self.await_generation_finished(generation=generation)
+            self.await_generation_finished(generation)
 
             if self.debug:
                 print(f"Jobs finished.")
 
-            individuals = self.summarize_finished_calculation_tasks(generation=generation)
+            summarized_calculation_data, summarized_fitness = self.summarize_finished_calculation_tasks(generation)
+
+            individuals = [self.read_optimization_data(single_calculation["optimization"])[2]
+                           for single_calculation in summarized_calculation_data]
+
+            fitnesses = [self.linear_scalarization(single_fitness)
+                         for single_fitness in summarized_fitness]
+
+            print(individuals)
+            print()
+            print(fitnesses)
 
             if self.debug:
                 print(f"Generation summarized.")
 
-            population = self.current_eat.evaluate_finished_calculations(individuals=individuals)
+            population = self.current_eat.evaluate_finished_calculations(individuals, fitnesses)
 
             if self.debug:
                 print(f"Generation evaluated.")
 
-            population = self.current_eat.select_best_individuals(population=population)
+            population = self.current_eat.select_best_individuals(population)
 
             optimization_history = self.current_oh(
                 author=optimization_task.author,
@@ -476,7 +486,8 @@ class OptimizationManager:
             if self.debug:
                 print("Generation selected.")
 
-        return self.current_eat.select_nth_of_hall_of_fame(self.current_data["optimization"]["number_of_solutions"])
+        return self.current_eat.select_nth_of_hall_of_fame(
+            self.current_data["optimization"]["parameters"]["number_of_solutions"])
 
     def manage_linear_optimization(self):
         # def custom_linear_optimization_queue(individual):

@@ -14,7 +14,7 @@ from shutil import rmtree
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from db import Session
 from models import OptimizationTask, OptimizationHistory
-from config import OPTIMIZATION_FILE, DATA_FILE, JSON_SCHEMA_UPLOAD, OPTIMIZATION_RUN, OPTIMIZATION_DATA
+from config import DATA_FILE, JSON_SCHEMA_MODFLOW_OPTIMIZATION, OPTIMIZATION_RUN, OPTIMIZATION_DATA
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -32,7 +32,7 @@ def upload_file() -> jsonify:
         file_upload = request.files["file"]
         request_data = json.load(file_upload)
 
-        schema_upload = load_json(JSON_SCHEMA_UPLOAD)
+        schema_upload = load_json(JSON_SCHEMA_MODFLOW_OPTIMIZATION)
 
         try:
             validate(instance=request_data,

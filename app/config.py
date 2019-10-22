@@ -3,13 +3,12 @@ DATABASE_URL = "postgresql+psycopg2://root:root@postgres:5432/optimization"
 
 # Schema that has to be validated against the uploaded json
 JSON_SCHEMA_UPLOAD = "./json_schema/schema_upload.json"
+JSON_SCHEMA_MODFLOW_OPTIMIZATION = "./json_schema/schema_modflow_optimization.json"
 
 # Folder for optimization data
 OPTIMIZATION_DATA = "/optimization-data/"
 # CALCULATION_DATA = "/calculation-data/"
 
-# Optimization ext
-OPTIMIZATION_FILE = "optimization"
 # Data ext
 DATA_FILE = "data"
 
@@ -48,5 +47,3 @@ OPTIMIZATION_TYPE_EVOLUTION = "GA"
 OPTIMIZATION_TYPE_LINEAR = "LO"
 
 MAX_STORING_TIME_OPTIMIZATION_TASKS = 20  # in days
-
-DATE_FORMAT = "%Y-%m-%d"
