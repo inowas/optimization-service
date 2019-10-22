@@ -5,21 +5,25 @@ Author: Aybulat Fatkhutdinov
 """
 
 import os
+import pathlib
 import math
 import numpy as np
+from typing import Union
 import flopy
 
 
 class InowasFlopyReadFitness:
     """Calculation of objective values of a model """
 
-    def __init__(self, optimization_data, flopy_adapter):
+    def __init__(self,
+                 optimization_data: dict,
+                 flopy_adapter):
 
         self.optimization_data = optimization_data
 
-        self.dis_package = flopy_adapter._mf.get_package('DIS')
-        self.model_ws = flopy_adapter._mf.model_ws
-        self.model_name = flopy_adapter._mf.namefile.split('.')[0]
+        self.dis_package = flopy_adapter.get_package('DIS')  # _mf.
+        self.model_ws = flopy_adapter.model_ws  # _mf.
+        self.model_name = flopy_adapter.namefile.split('.')[0]  # _mf.
         self.objects = self.optimization_data['objects']
 
         objectives_values = self.read_objectives()
@@ -30,16 +34,16 @@ class InowasFlopyReadFitness:
         else:
             self.fitness = objectives_values
 
-
     def get_fitness(self):
 
         return self.fitness
 
     def read_objectives(self):
-        "Returnes fitnes list"
+        """Returns fitness list"""
         fitness = []
 
         for objective in self.optimization_data["objectives"]:
+            value = None
 
             if objective["type"] == "concentration":
                 mask = self.make_mask(
@@ -52,14 +56,15 @@ class InowasFlopyReadFitness:
                     objective["location"], self.objects, self.dis_package
                 )
                 value = self.read_head(objective, mask, self.model_ws, self.model_name)
-          
 
             elif objective["type"] == "flux":
                 value = self.read_flux(objective, self.objects)
 
-            
             elif objective["type"] == "input_concentration":
                 value = self.read_input_concentration(objective, self.objects)
+
+            # if not value:
+            #     print(f"Error: could not read objective for {objective['type']}.")
             
             value = self.summary(value, objective["summary_method"])
             fitness.append(value.item())
@@ -71,6 +76,7 @@ class InowasFlopyReadFitness:
         constraints_exceeded = []
 
         for constraint in self.optimization_data["constraints"]:
+            value = None
 
             if constraint["type"] == 'head':
                 mask = self.make_mask(
@@ -102,14 +108,14 @@ class InowasFlopyReadFitness:
             
             if constraint["operator"] == "less":
                 if value > constraint["value"]:
-                    print("Constraint value {} exceeded max value {}, penalty will be assigned".format(value, constraint["value"]))
+                    print(f"Constraint value {value} exceeded max value {constraint['value']}, penalty will be assigned")
                     constraints_exceeded.append(True)
                 else:
                     constraints_exceeded.append(False)
                 
             elif constraint["operator"] == "more":
                 if value < constraint["value"]:
-                    print("Constraint value {} lower than min value {}, penalty will be assigned".format(value, constraint["value"]))
+                    print(f"Constraint value {value} lower than min value {constraint['value']}, penalty will be assigned")
                     constraints_exceeded.append(True)
                 else:
                     constraints_exceeded.append(False)
@@ -125,21 +131,25 @@ class InowasFlopyReadFitness:
         elif method == 'min':
             result = np.min(result)
         else:
-            print("Unknown summary method {}. Using max".format(method))
+            print(f"Unknown summary method {method}. Using max")
             result = np.max(result)
         
         return result
-
 
     @staticmethod
     def read_head(data, mask, model_ws, model_name):
         "Reads head file"
 
-        print('Read head values at location: {}'.format(data['location']))
+        print(f'Read head values at location: {data["location"]}')
         
         try:
+            print(f"{pathlib.Path(model_ws, model_name)}.hds")
+
             head_file_object = flopy.utils.HeadFile(
-                os.path.join(model_ws, model_name) + '.hds')
+                f"{pathlib.Path(model_ws, model_name)}.hds", verbose=True)
+
+            print("Read head.")
+
             head = head_file_object.get_alldata(
                 nodata=-9999
                 )
@@ -147,18 +157,22 @@ class InowasFlopyReadFitness:
 
             head_file_object.close()
 
+            return head
+        except FileNotFoundError:
+            print(f'Head file of the model: {model_name} not found')
         except:
-            print('Head file of the model: '+model_name+' could not be opened')
+            print(f'Head file of the model: {model_name} could not be opened')
 
-        return head
+        return
     
     @staticmethod
     def read_concentration(data, mask, model_ws, model_name):
         "Reads concentrations file"
 
-        print('Read concentration values at location: {}'.format(data['location']))
+        print(f'Read concentration values at location: {data["location"]}')
 
         try:
+            print(os.path.join(model_ws, data["conc_file_name"]))
             conc_file_object = flopy.utils.UcnFile(
                 os.path.join(model_ws, data["conc_file_name"]))
             conc = conc_file_object.get_alldata(
@@ -169,7 +183,7 @@ class InowasFlopyReadFitness:
             conc_file_object.close()
         
         except:
-            print('Concentrations file of the model: '+model_name+' could not be opened')
+            print(f'Concentrations file of the model: {model_name} could not be opened')
             return None
 
         return conc
@@ -178,7 +192,7 @@ class InowasFlopyReadFitness:
     def read_flux(data, objects):
         "Reads wel fluxes"
 
-        print('Read flux values at location: {}'.format(data['location']))
+        print(f'Read flux values at location: {data["location"]}')
 
         fluxes = np.array([])
 
@@ -204,7 +218,7 @@ class InowasFlopyReadFitness:
     @staticmethod
     def read_input_concentration(data, objects):
 
-        print('Read input_concentration values at location: {}'.format(data['location']))
+        print(f'Read input_concentration values at location: {data["location"]}')
 
         input_concentrations = np.array([])
 
@@ -227,9 +241,8 @@ class InowasFlopyReadFitness:
                     obj_concentrations.append(period_data[component]['result'])
                 input_concentrations = np.hstack(
                     (input_concentrations, 
-                    np.array(obj_concentrations))
+                     np.array(obj_concentrations))
                 )
-        
 
         return input_concentrations
     
@@ -237,7 +250,7 @@ class InowasFlopyReadFitness:
     def read_distance(data, objects):
         """Returns distance between two groups of objects"""
 
-        print('Read distance between {} and {}'.format(data['location_1'], data['location_2']))
+        print(f'Read distance between {data["location_1"]} and {data["location_2"]}')
 
         location_1 = data["location_1"]
         location_2 = data["location_2"]
@@ -290,11 +303,13 @@ class InowasFlopyReadFitness:
     def make_mask(location, objects, dis_package):
         "Returns an array mask of location that has nper,nlay,nrow,ncol dimensions"
 
-        print('Making mask array for location: {}'.format(location))
+        print(f'Making mask array for location: {location}')
         nstp_flat = dis_package.nstp.array.sum()
         nrow = dis_package.nrow
         ncol = dis_package.ncol
         nlay = dis_package.nlay
+
+        mask = None
 
         if location["type"] == 'bbox':
             try:
@@ -365,6 +380,6 @@ class InowasFlopyReadFitness:
                     cols.append(obj['position']['col']['result'])
 
             mask = np.zeros((nstp_flat, nlay, nrow, ncol), dtype=bool)
-            mask[:,lays,rows,cols] = True
+            mask[:, lays, rows, cols] = True
         
         return mask

@@ -143,6 +143,9 @@ class InowasFlopyCalculationAdapter:
                 self._success, report = self.run_model(self._model, model_type='mp')
                 self._report += report
 
+    def get_model_and_success(self):
+        return self._model, self._success
+
     @staticmethod
     def read_packages(data):
         package_content = {}

@@ -24,11 +24,10 @@ class OptimizationTask(Base):
     total_generation = Column(Integer)
     solution = Column(ARRAY(Float))
     scalar_fitness = Column(Float)
-    opt_filepath = Column(String)
     data_filepath = Column(String)
 
     def __init__(self, author, project, optimization_id, optimization_type, optimization_state, total_population,
-                 total_generation, solution, opt_filepath, data_filepath, **args):
+                 total_generation, solution, data_filepath, **args):
         super().__init__(**args)
 
         self.author = author
@@ -43,7 +42,6 @@ class OptimizationTask(Base):
         self.total_generation = total_generation
         self.solution = solution
         self.scalar_fitness = INITIAL_SCALAR_FITNESS
-        self.opt_filepath = opt_filepath
         self.data_filepath = data_filepath
 
 
@@ -72,7 +70,7 @@ class CalculationTask:  # EvolutionaryOptimization (Base)
     author = Column(String)
     project = Column(String)
     optimization_id = Column(String)
-    calculation_id = Column(UUID(as_uuid=True), primary_key=True, unique=True)
+    calculation_id = Column(String, primary_key=True, unique=True)  # UUID(as_uuid=False)
     calculation_type = Column(String)
     calculation_state = Column(String)
     generation = Column(Integer)
