@@ -55,7 +55,7 @@ class HobAdapter:
 
     @staticmethod
     def default():
-        default = {
+        return {
             "iuhobsv": 1051,
             "hobdry": 0,
             "tomulth": 1.0,
@@ -65,7 +65,6 @@ class HobAdapter:
             "unitnumber": None,
             "filenames": None
         }
-        return default
 
     @staticmethod
     def read_package(package):
