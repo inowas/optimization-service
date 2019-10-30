@@ -28,4 +28,7 @@ WORKDIR /app
 # Install packages
 RUN pip install -r ./requirements.txt
 
+# Install flopydatamodel and adapters
+RUN pip install git+https://github.com/inowas/flopyAdapter@master
+
 RUN rm -rf /pymake-1.1
