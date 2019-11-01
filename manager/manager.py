@@ -1,25 +1,25 @@
 import copy
-import os.path
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from time import sleep
 from datetime import datetime
 import pandas as pd
 from pathlib import Path
 from uuid import uuid4
+from hashlib import md5
+import json
 from sqlalchemy import or_
 from typing import Tuple, List, Optional
-from helper_functions import create_input_and_output_filepath, load_json, write_json, get_table_for_optimization_id
-from evolutionary_toolbox import EAToolbox
-from db import Session, engine
-from models import Base, OptimizationTask, CalculationTask, OptimizationHistory
-from config import OPTIMIZATION_DATA
-from config import CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, \
-    CALCULATION_FINISH, OPTIMIZATION_FINISH, MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT
+from .evolutionary_toolbox import EAToolbox
 
-
-def scalarize_solution(solution):
-    return sum(solution)
+import os.path
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
+from helper_functions import create_input_and_output_filepath, load_json, write_json, \
+    get_table_for_optimization_id   # noqa: E402
+from db import Session, engine  # noqa: E402
+from models import Base, OptimizationTask, CalculationTask, OptimizationHistory  # noqa: E402
+from config import OPTIMIZATION_DATA, CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, \
+    CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, OPTIMIZATION_FINISH, \
+    MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT  # noqa: E402
 
 
 class OptimizationManager:
@@ -44,6 +44,7 @@ class OptimizationManager:
         self.current_optimization_id = None
 
         self.current_data = None
+        self.current_optimization_data = None
         self.current_variable_map = None
 
         self.current_eat = None
@@ -87,7 +88,7 @@ class OptimizationManager:
 
         return data
 
-    # Authr: Aybulat Fatkhutdinov; modified
+    # Author: Aybulat Fatkhutdinov; modified
     def read_optimization_data(self,
                                optimization_data: dict = None):
         """
@@ -242,7 +243,8 @@ class OptimizationManager:
 
         for calculation in finished_calculation_tasks:
             summarized_calculation_data.append(load_json(calculation.calcinput_filepath))
-            summarized_fitness.append(load_json(calculation.calcoutput_filepath)["fitness"])
+            summarized_fitness.append(calculation.fitness)
+            # summarized_fitness.append(load_json(calculation.calcoutput_filepath)["fitness"])
 
         return summarized_calculation_data, summarized_fitness
 
@@ -269,13 +271,11 @@ class OptimizationManager:
 
     def create_single_calculation_job(self,
                                       individual: List[float],
-                                      generation: int = None,
-                                      individual_id: int = None) -> None:
+                                      generation: int = None) -> None:
         """
 
         :param individual:
         :param generation:
-        :param individual_id:
         :return:
         """
 
@@ -285,33 +285,29 @@ class OptimizationManager:
 
         calculation_id = self.create_unique_id()
 
-        calcinput_filepath, calcoutput_filepath = create_input_and_output_filepath(
-            folder=Path(OPTIMIZATION_DATA, self.current_optimization_id), task_id=calculation_id,
-            file_types=[CALC_INPUT_EXT, CALC_OUTPUT_EXT])
+        hash_id = md5(json.dumps(calculation_data).encode("utf-8")).hexdigest()
+
+        calculation_data_filepath = create_input_and_output_filepath(
+            folder=Path(OPTIMIZATION_DATA, self.current_optimization_id), task_id=hash_id,
+            file_types=[CALC_INPUT_EXT])
 
         new_calc_task = self.current_ct(
             author=optimization_task.author,
             project=optimization_task.project,
             optimization_id=optimization_task.optimization_id,
             calculation_id=calculation_id,
+            hash_id=hash_id,
             calculation_type=optimization_task.optimization_type,
             calculation_state=CALCULATION_START,  # Set state to start
             generation=generation,
-            individual_id=individual_id,
-            data_filepath=optimization_task.data_filepath,
-            calcinput_filepath=calcinput_filepath,
-            calcoutput_filepath=calcoutput_filepath
+            calculation_data_filepath=calculation_data_filepath
         )
 
         write_json(obj=calculation_data,
-                   filepath=calcinput_filepath)
-
-        # print(f"Generation {generation}: Wrote job json.")
+                   filepath=calculation_data_filepath)
 
         self.session.add(new_calc_task)
         self.session.commit()
-
-        # print(f"Generation {generation}: Job commited to database.")
 
     def create_new_calculation_jobs(self,
                                     generation: int,
@@ -324,8 +320,7 @@ class OptimizationManager:
         """
         for i, individual in enumerate(population):
             self.create_single_calculation_job(generation=generation,
-                                               individual=individual,
-                                               individual_id=i)
+                                               individual=individual)
 
     def linear_optimization_queue(self,
                                   individual: List[float]):
@@ -342,14 +337,12 @@ class OptimizationManager:
         else:
             generation = 1
 
-        individual_id = 0
         total_population = 1
 
         individual = list(individual)  # Mystic solver converts solution to a numpy array; we need a list
 
         self.create_single_calculation_job(generation=generation,
-                                           individual=individual,
-                                           individual_id=individual_id)
+                                           individual=individual)
 
         self.await_generation_finished(generation=generation,
                                        total_population=total_population)

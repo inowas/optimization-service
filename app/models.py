@@ -1,6 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Integer, Float, Date, ARRAY
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Integer, Float, ARRAY
 from datetime import datetime
 from config import INITIAL_SCALAR_FITNESS
 
@@ -15,7 +14,7 @@ class OptimizationTask(Base):
     author = Column(String)
     project = Column(String)
     publishing_date = Column(String)
-    optimization_id = Column(String, primary_key=True)
+    optimization_id = Column(String, primary_key=True, unique=True)
     optimization_type = Column(String)
     optimization_state = Column(String)
     current_population = Column(Integer)
@@ -45,13 +44,12 @@ class OptimizationTask(Base):
         self.data_filepath = data_filepath
 
 
-class OptimizationHistory:  # (Base)
-    # __tablename__ = "optimization_progress"
-
+class OptimizationHistory:
+    # Column definitions
     author = Column(String)
     project = Column(String)
     optimization_id = Column(String)
-    generation = Column(Integer, primary_key=True)
+    generation = Column(Integer, primary_key=True, unique=True)
     scalar_fitness = Column(Float)
 
     def __init__(self, author, project, optimization_id, generation, scalar_fitness, **args):
@@ -64,33 +62,32 @@ class OptimizationHistory:  # (Base)
         self.scalar_fitness = scalar_fitness
 
 
-class CalculationTask:  # EvolutionaryOptimization (Base)
-    # __tablename__ = "calculation_tasks"  # _evolutionary_optimization
-
+class CalculationTask:
+    # Column definitions
     author = Column(String)
     project = Column(String)
     optimization_id = Column(String)
-    calculation_id = Column(String, primary_key=True, unique=True)  # UUID(as_uuid=False)
+    calculation_id = Column(String, primary_key=True, unique=True)
+    hash_id = Column(String)
     calculation_type = Column(String)
     calculation_state = Column(String)
     generation = Column(Integer)
     individual_id = Column(Integer)
-    data_filepath = Column(String)
-    calcinput_filepath = Column(String)
-    calcoutput_filepath = Column(String)
+    calculation_data_filepath = Column(String)
+    fitness = Column(ARRAY)
 
-    def __init__(self, author, project, optimization_id, calculation_id, calculation_type, calculation_state,
-                 generation, individual_id, data_filepath, calcinput_filepath, calcoutput_filepath, **args):
+    def __init__(self, author, project, optimization_id, calculation_id, hash_id, calculation_type, calculation_state,
+                 generation, calculation_data_filepath, **args):
         super().__init__(**args)
 
         self.author = author
         self.project = project
         self.optimization_id = optimization_id
         self.calculation_id = calculation_id
+        self.hash_id = hash_id
         self.calculation_type = calculation_type
         self.calculation_state = calculation_state
         self.generation = generation
-        self.individual_id = individual_id
-        self.data_filepath = data_filepath
-        self.calcinput_filepath = calcinput_filepath
-        self.calcoutput_filepath = calcoutput_filepath
+        self.hash_id = hash_id
+        self.calculation_data_filepath = calculation_data_filepath
+        self.fitness = []

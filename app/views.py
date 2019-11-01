@@ -150,6 +150,7 @@ def show_single_optimization_progress(optimization_id_):
 
                     fig = plt.figure()
                     ax = fig.add_subplot(111)
+                    ax.ylim((0, optimization_progress_df['scalar_fitness'].iloc[0]))
 
                     optimization_progress_df.plot(x="generation",
                                                   y="scalar_fitness",
