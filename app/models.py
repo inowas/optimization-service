@@ -68,7 +68,7 @@ class CalculationTask:
     project = Column(String)
     optimization_id = Column(String)
     calculation_id = Column(String, primary_key=True, unique=True)
-    hash_id = Column(String)
+    calculation_id2 = Column(String)
     calculation_type = Column(String)
     calculation_state = Column(String)
     generation = Column(Integer)
@@ -76,7 +76,7 @@ class CalculationTask:
     calculation_data_filepath = Column(String)
     fitness = Column(ARRAY)
 
-    def __init__(self, author, project, optimization_id, calculation_id, hash_id, calculation_type, calculation_state,
+    def __init__(self, author, project, optimization_id, calculation_id, calculation_id2, calculation_type, calculation_state,
                  generation, calculation_data_filepath, **args):
         super().__init__(**args)
 
@@ -84,7 +84,7 @@ class CalculationTask:
         self.project = project
         self.optimization_id = optimization_id
         self.calculation_id = calculation_id
-        self.hash_id = hash_id
+        self.calculation_id2 = calculation_id2
         self.calculation_type = calculation_type
         self.calculation_state = calculation_state
         self.generation = generation

@@ -178,6 +178,18 @@ class OptimizationManager:
         """
         return str(uuid4())
 
+    @staticmethod
+    def create_md5_hash(calculation_data: dict) -> str:
+        """ Function to generate md5 hash from calculation data in order to identify similar calculations
+
+        Args:
+            calculation_data (dict) - the calculation data with the model etc.
+
+        Returns:
+            str - the data coded as md5 hash
+        """
+        return md5(json.dumps(calculation_data).encode("utf-8")).hexdigest()
+
     def get_weights(self) -> tuple:
         """ Function used to extract objectives from the json that holds the whole optimization task
 
@@ -244,7 +256,6 @@ class OptimizationManager:
         for calculation in finished_calculation_tasks:
             summarized_calculation_data.append(load_json(calculation.calcinput_filepath))
             summarized_fitness.append(calculation.fitness)
-            # summarized_fitness.append(load_json(calculation.calcoutput_filepath)["fitness"])
 
         return summarized_calculation_data, summarized_fitness
 
@@ -285,10 +296,10 @@ class OptimizationManager:
 
         calculation_id = self.create_unique_id()
 
-        hash_id = md5(json.dumps(calculation_data).encode("utf-8")).hexdigest()
+        calculation_id2 = self.create_md5_hash(calculation_data)
 
         calculation_data_filepath = create_input_and_output_filepath(
-            folder=Path(OPTIMIZATION_DATA, self.current_optimization_id), task_id=hash_id,
+            folder=Path(OPTIMIZATION_DATA, self.current_optimization_id), task_id=calculation_id2,
             file_types=[CALC_INPUT_EXT])
 
         new_calc_task = self.current_ct(
@@ -296,15 +307,19 @@ class OptimizationManager:
             project=optimization_task.project,
             optimization_id=optimization_task.optimization_id,
             calculation_id=calculation_id,
-            hash_id=hash_id,
+            calculation_id2=calculation_id2,
             calculation_type=optimization_task.optimization_type,
             calculation_state=CALCULATION_START,  # Set state to start
             generation=generation,
             calculation_data_filepath=calculation_data_filepath
         )
 
-        write_json(obj=calculation_data,
-                   filepath=calculation_data_filepath)
+        existing_jobs_with_same_calculation_id2 = self.session.query(self.current_ct)\
+            .filter(self.current_ct.calculation_id2 == calculation_id2).all()
+
+        if not existing_jobs_with_same_calculation_id2:
+            write_json(obj=calculation_data,
+                       filepath=calculation_data_filepath)
 
         self.session.add(new_calc_task)
         self.session.commit()

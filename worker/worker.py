@@ -1,7 +1,7 @@
 import os.path
 import sys
 from time import sleep
-from flopyAdapter import FlopyDatamodel
+from flopyAdapter import FlopyDataModel
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from helper_functions import load_json, get_table_for_optimization_id  # noqa: E402
 from db import Session  # noqa: E402
@@ -23,12 +23,12 @@ class WorkerManager:
 
         # Temporary attributes
         self.current_optimization_id = None
-        self.current_calculation_id = None
+        self.current_calculation_id2 = None
         self.current_ct = None
 
     def reset_temporary_attributes(self):
         self.current_optimization_id = None
-        self.current_calculation_id = None
+        self.current_calculation_id2 = None
         self.current_ct = None
 
     def query_first_starting_calculation_task(self) -> Session.query:
@@ -44,7 +44,7 @@ class WorkerManager:
     def query_calculation_task_with_id(self) -> Session.query:
 
         return self.session.query(self.current_ct).\
-            filter(self.current_ct.calculation_id == self.current_calculation_id).first()
+            filter(self.current_ct.calculation_id == self.current_calculation_id2).first()
 
     def query_current_optimization_task(self) -> Session.query:
 
@@ -67,15 +67,24 @@ class WorkerManager:
                 new_calculation_task = self.query_first_starting_calculation_task()
 
                 if new_calculation_task:
-                    new_calculation_task.calculation_state = CALCULATION_RUN
+                    self.current_calculation_id2 = new_calculation_task.calculation_id2
+
+                    jobs_with_same_calculation_id2 = self.session.query(self.current_ct)\
+                        .filter(self.current_ct.calculation_id2 == self.current_calculation_id2).all()
+
+                    for job in jobs_with_same_calculation_id2:
+                        job.calculation_state = CALCULATION_RUN
+
+                    # new_calculation_task.calculation_state = CALCULATION_RUN
+
                     self.session.commit()
 
-                    self.current_calculation_id = new_calculation_task.calculation_id
+                    # todo check if already existing and if not start this
 
                     calculation_data = load_json(new_calculation_task.calculation_data)
 
                     # Build model
-                    flopy_data_model = FlopyDatamodel(version=calculation_data["version"],
+                    flopy_data_model = FlopyDataModel(version=calculation_data["version"],
                                                       data=calculation_data["data"],
                                                       uuid=calculation_data["optimization_id"])
 
@@ -89,16 +98,17 @@ class WorkerManager:
                                                            constraints=calculation_data["optimization"]["constraints"],
                                                            objects=calculation_data["optimization"]["objects"])
 
-                    # data_output = {"fitness": fitness}
-                    #
-                    # write_json(obj=data_output,
-                    #            filepath=new_calculation_task.calcoutput_filepath)
+                    # todo else if existing already a finished job take its fitness instead!
 
-                    new_calculation_task.scalar_fitness = fitness
-                    new_calculation_task.calculation_state = CALCULATION_FINISH
+                    for job in jobs_with_same_calculation_id2:
+                        job.scalar_fitness = fitness
+                        job.calculation_state = CALCULATION_FINISH
 
-                    if running_optimization_task.optimization_type == OPTIMIZATION_TYPE_EVOLUTION:
-                        running_optimization_task.current_population += 1
+                    # new_calculation_task.scalar_fitness = fitness
+                    # new_calculation_task.calculation_state = CALCULATION_FINISH
+
+                        if running_optimization_task.optimization_type == OPTIMIZATION_TYPE_EVOLUTION:
+                            running_optimization_task.current_population += 1
                     self.session.commit()
 
                     continue
