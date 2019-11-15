@@ -1,7 +1,8 @@
 import os.path
 import sys
 from time import sleep
-from flopyAdapter import FlopyDataModel
+from flopyAdapter import ModflowDataModel, FlopyModelManager
+# from flopyAdapter import FlopyDataModel
 sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
 from helper_functions import load_json, get_table_for_optimization_id  # noqa: E402
 from db import Session  # noqa: E402
@@ -84,31 +85,40 @@ class WorkerManager:
                     calculation_data = load_json(new_calculation_task.calculation_data)
 
                     # Build model
-                    flopy_data_model = FlopyDataModel(version=calculation_data["version"],
-                                                      data=calculation_data["data"],
-                                                      uuid=calculation_data["optimization_id"])
+                    modflowdaatmodel = ModflowDataModel.from_data(calculation_data)
 
-                    flopy_data_model.add_wells(objects=calculation_data["optimization"]["objects"])
+                    flopymodelmanager = FlopyModelManager.from_modflowdatamodel(modflowdaatmodel)
 
-                    flopy_data_model.build_flopy_models()
+                    flopymodelmanager.build_flopymodel()
 
-                    flopy_data_model.run_models()
+                    flopymodelmanager.run_model()
 
-                    fitness = flopy_data_model.get_fitness(objectives=calculation_data["optimization"]["objectives"],
-                                                           constraints=calculation_data["optimization"]["constraints"],
-                                                           objects=calculation_data["optimization"]["objects"])
+                    # flopy_data_model = FlopyDataModel(version=calculation_data["version"],
+                    #                                   data=calculation_data["data"],
+                    #                                   uuid=calculation_data["optimization_id"])
+                    #
+                    # flopy_data_model.add_wells(objects=calculation_data["optimization"]["objects"])
+                    #
+                    # flopy_data_model.build_flopy_models()
+                    #
+                    # flopy_data_model.run_models()
+
+                    # fitness = flopy_data_model.get_fitness(objectives=calculation_data["optimization"]["objectives"],
+                    #                                        constraints=calculation_data["optimization"]["constraints"],
+                    #                                        objects=calculation_data["optimization"]["objects"])
 
                     # todo else if existing already a finished job take its fitness instead!
 
                     for job in jobs_with_same_calculation_id2:
-                        job.scalar_fitness = fitness
+                        # job.scalar_fitness = fitness
                         job.calculation_state = CALCULATION_FINISH
+
+                        if running_optimization_task.optimization_type == OPTIMIZATION_TYPE_EVOLUTION:
+                            running_optimization_task.current_population += 1
 
                     # new_calculation_task.scalar_fitness = fitness
                     # new_calculation_task.calculation_state = CALCULATION_FINISH
 
-                        if running_optimization_task.optimization_type == OPTIMIZATION_TYPE_EVOLUTION:
-                            running_optimization_task.current_population += 1
                     self.session.commit()
 
                     continue
