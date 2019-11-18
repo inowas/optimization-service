@@ -5,6 +5,7 @@ import pandas as pd
 from pathlib import Path
 from uuid import uuid4
 from sqlalchemy import or_
+from sqlalchemy.exc import DBAPIError
 from typing import Tuple, List, Optional
 from .evolutionary_toolbox import EAToolbox
 from flopyAdapter import ModflowDataModel, FlopyFitnessAdapter
@@ -16,9 +17,9 @@ from helper_functions import create_input_and_output_filepath, load_json, write_
     get_table_for_optimization_id   # noqa: E402
 from db import Session, engine  # noqa: E402
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory  # noqa: E402
-from config import OPTIMIZATION_DATA, CALC_INPUT_EXT, CALC_OUTPUT_EXT, OPTIMIZATION_START, \
-    CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, OPTIMIZATION_FINISH, \
-    MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT  # noqa: E402
+from config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_ODATA_FOLDER, \
+    OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, OPTIMIZATION_FINISH, \
+    MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, ODATA_FILENAME, MDATA_FILENAME, JSON_ENDING  # noqa: E402
 
 
 class OptimizationManager:
@@ -27,48 +28,44 @@ class OptimizationManager:
                  ea_toolbox,
                  optimization_task,
                  optimization_history,
-                 calculation_task,
-                 print_progress: bool = False):
+                 calculation_task):
         # Db session and evolutionary algorithm toolbox
-        self.session = session
-        self.ea_toolbox = ea_toolbox
+        self._session = session
+        self._ea_toolbox = ea_toolbox
 
         # Preset tables
-        self.ot = optimization_task
-        self.oh = optimization_history
-        self.ct = calculation_task
+        self._ot_model = optimization_task
+        self._oh_model = optimization_history
+        self._ct_model = calculation_task
 
         # Json schema for calculation data
         self._schema = None
         self._resolver = None
 
         # Temporary attributes (used for one optimization and then overwritten)
-        self.current_optimization_id = None
+        self._current_oid = None
 
-        self.current_request_data = None
-        self.current_optimization_data = None
-        self.current_model_data = None
+        self._current_rdata = None  # request data
+        self._current_odata = None  # optimization data
+        self._current_mdata = None  # model data
 
-        self.current_variable_map = None
+        self._current_vmap = None  # variable map
 
-        self.current_eat = None
-        self.current_oh = None
-        self.current_ct = None
-
-        # Others
-        self.print_progress = print_progress
+        self._current_eat = None
+        self._current_oh = None
+        self._current_ct = None
 
     def reset_temporary_attributes(self):
-        self.current_optimization_id = None
+        self._current_oid = None
 
-        self.current_request_data = None
-        self.current_optimization_data = None
-        self.current_model_data = None
-        self.current_variable_map = None
+        self._current_rdata = None
+        self._current_odata = None
+        self._current_mdata = None
+        self._current_vmap = None
 
-        self.current_eat = None
-        self.current_oh = None
-        self.current_ct = None
+        self._current_eat = None
+        self._current_oh = None
+        self._current_ct = None
 
     # Author: Aybulat Fatkhutdinov; modified
     @staticmethod
@@ -108,7 +105,7 @@ class OptimizationManager:
         var_bounds = []
         initial_values = []
 
-        optimization_data = optimization_data or self.current_optimization_data
+        optimization_data = optimization_data or self._current_odata
 
         for object_ in optimization_data["objects"]:
             for parameter, value in object_.items():
@@ -177,7 +174,7 @@ class OptimizationManager:
         Returns:
              objectives (tuple of ints) - the objectives of each function as presented in the json
         """
-        return tuple(objective["weight"] for objective in self.current_optimization_data["objectives"])
+        return tuple(objective["weight"] for objective in self._current_odata["objectives"])
 
     def linear_scalarization(self,
                              fitness: List[float]):
@@ -194,8 +191,8 @@ class OptimizationManager:
             query - first optimization task in list
 
         """
-        return self.session.query(self.ot)\
-            .filter(self.ot.optimization_state == OPTIMIZATION_START).first()
+        return self._session.query(self._ot_model)\
+            .filter(self._ot_model.optimization_state == OPTIMIZATION_START).first()
 
     @property
     def current_ot(self) -> Session.query:
@@ -205,8 +202,8 @@ class OptimizationManager:
         :return:
         """
 
-        return self.session.query(self.ot).\
-            filter(self.ot.optimization_id == self.current_optimization_id).first()
+        return self._session.query(self._ot_model).\
+            filter(self._ot_model.optimization_id == self._current_oid).first()
 
     def query_finished_calculation_tasks(self,
                                          generation: int) -> Session.query:
@@ -216,9 +213,9 @@ class OptimizationManager:
         :return:
         """
 
-        return self.session.query(self.current_ct).\
-            filter(self.current_ct.generation == generation,
-                   self.current_ct.calculation_state == CALCULATION_FINISH).all()
+        return self._session.query(self._current_ct).\
+            filter(self._current_ct.generation == generation,
+                   self._current_ct.calculation_state == CALCULATION_FINISH).all()
 
     def summarize_finished_calculation_tasks(self,
                                              generation: int) -> Tuple[List[dict], list]:
@@ -230,17 +227,26 @@ class OptimizationManager:
 
         finished_calculation_tasks = self.query_finished_calculation_tasks(generation=generation)
 
-        summarized_calculation_data = []
+        summarized_individual_odata = []
         summarized_fitness = []
 
         for calculation in finished_calculation_tasks:
-            summarized_calculation_data.append(load_json(calculation.calcinput_filepath))
-            flopyfitnessadapter = FlopyFitnessAdapter.from_id(self.current_optimization_data,
+            individual_odata = create_input_and_output_filepath(
+                folder=Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER,
+                            self.current_ot.optimization_id, INDIVIDUAL_ODATA_FOLDER),
+                task_id=calculation.calculation_id2,
+                file_name=[ODATA_FILENAME],
+                file_type=JSON_ENDING
+            )[0]
+
+            summarized_individual_odata.append(load_json(individual_odata))
+
+            flopyfitnessadapter = FlopyFitnessAdapter.from_id(self._current_odata,
                                                               calculation.calculation_id2,
                                                               OPTIMIZATION_DATA)
             summarized_fitness.append(flopyfitnessadapter.get_fitness())
 
-        return summarized_calculation_data, summarized_fitness
+        return summarized_individual_odata, summarized_fitness
 
     def await_generation_finished(self,
                                   generation: int,
@@ -254,10 +260,10 @@ class OptimizationManager:
         total_population = total_population or self.current_ot.total_population
 
         while True:
-            current_population = self.session.query(self.current_ct).\
-                filter(self.current_ct.optimization_id == self.current_optimization_id,
-                       self.current_ct.generation == generation,
-                       self.current_ct.calculation_state == CALCULATION_FINISH).count()
+            current_population = self._session.query(self._current_ct).\
+                filter(self._current_ct.optimization_id == self._current_oid,
+                       self._current_ct.generation == generation,
+                       self._current_ct.calculation_state == CALCULATION_FINISH).count()
 
             if current_population == total_population:
                 break
@@ -277,43 +283,61 @@ class OptimizationManager:
         # todo store individual parameters somewhere so that we can obtain this later after calculation to get
         # todo parameters with their fitness
 
-        optimization_data = self.apply_individual(optimization_data=deepcopy(self.current_optimization_data),
-                                                  individual=individual,
-                                                  variable_map=self.current_variable_map)
+        individual_odata = self.apply_individual(optimization_data=deepcopy(self._current_odata),
+                                                 individual=individual,
+                                                 variable_map=self._current_vmap)
 
         calculation_id = self.create_unique_id()
 
-        modflowdatamodel = ModflowDataModel.from_data(data=self.current_model_data,
+        modflowdatamodel = ModflowDataModel.from_data(data=self._current_mdata,
                                                       schema=self._schema,
                                                       resolver=self._resolver)
 
-        modflowdatamodel.add_objects(objects=optimization_data["objects"])
+        modflowdatamodel.add_objects(objects=individual_odata["objects"])
+
+        parameter_set_filepath = create_input_and_output_filepath(
+            folder=Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER,
+                        self.current_ot.optimization_id, INDIVIDUAL_ODATA_FOLDER),
+            task_id=modflowdatamodel.md5_hash,
+            file_name=[ODATA_FILENAME],
+            file_type=JSON_ENDING
+        )[0]
 
         calculation_data_filepath = create_input_and_output_filepath(
-            folder=Path(OPTIMIZATION_DATA, self.current_optimization_id), task_id=modflowdatamodel.md5_hash,
-            file_types=[CALC_INPUT_EXT])
-
-        new_calc_task = self.current_ct(
-            author=self.current_ot.author,
-            project=self.current_ot.project,
-            optimization_id=self.current_ot.optimization_id,
-            calculation_id=calculation_id,
-            calculation_id2=modflowdatamodel.md5_hash,
-            calculation_type=self.current_ot.optimization_type,
-            calculation_state=CALCULATION_START,  # Set state to start
-            generation=generation,
-            calculation_data_filepath=calculation_data_filepath
+            folder=Path(OPTIMIZATION_DATA, CALCULATION_FOLDER),
+            task_id=modflowdatamodel.md5_hash,
+            file_name=[MDATA_FILENAME],
+            file_type=JSON_ENDING
         )
 
-        existing_jobs_with_same_calculation_id2 = self.session.query(self.current_ct)\
-            .filter(self.current_ct.calculation_id2 == modflowdatamodel.md5_hash).all()
+        try:
+            write_json(obj=individual_odata,
+                       filepath=parameter_set_filepath)
 
-        if not existing_jobs_with_same_calculation_id2:
-            write_json(obj=modflowdatamodel.data,
-                       filepath=calculation_data_filepath)
+            existing_jobs_with_same_calculation_id2 = self._session.query(self._current_ct)\
+                .filter(self._current_ct.calculation_id2 == modflowdatamodel.md5_hash).all()
 
-        self.session.add(new_calc_task)
-        self.session.commit()
+            if not existing_jobs_with_same_calculation_id2:
+                write_json(obj=modflowdatamodel.data,
+                           filepath=calculation_data_filepath)
+
+            new_calc_task = self._current_ct(
+                author=self.current_ot.author,
+                project=self.current_ot.project,
+                optimization_id=self.current_ot.optimization_id,
+                calculation_id=calculation_id,
+                calculation_id2=modflowdatamodel.md5_hash,
+                calculation_type=self.current_ot.optimization_type,
+                calculation_state=CALCULATION_START,  # Set state to start
+                generation=generation,
+                calculation_data_filepath=calculation_data_filepath
+            )
+
+            self._session.add(new_calc_task)
+            self._session.commit()
+
+        except (IOError, DBAPIError):
+            self._session.rollback()
 
     def create_new_calculation_jobs(self,
                                     generation: int,
@@ -336,11 +360,11 @@ class OptimizationManager:
         :return:
         """
 
-        calculation_task = self.session.query(self.current_ct).last()
+        calculation_task = self._session.query(self._current_ct).last()
 
         try:
             generation = calculation_task.generation + 1
-        except TypeError:
+        except TypeError:  # when generation is None, fresh start
             generation = 1
 
         total_population = 1
@@ -360,7 +384,7 @@ class OptimizationManager:
         optimization_task = self.current_ot
 
         optimization_task.scalar_fitness = scalar_solution
-        self.session.commit()
+        self._session.commit()
 
         return scalar_solution
 
@@ -369,9 +393,9 @@ class OptimizationManager:
 
         Path(optimization_task.data_filepath).unlink()
 
-        individual_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
+        individual_ct = get_table_for_optimization_id(self._ct_model, self._current_oid)
 
-        calculations = self.session.query(individual_ct).all()
+        calculations = self._session.query(individual_ct).all()
 
         calculation_files = [(calculation.calcinput_filepath,  calculation.calcoutput_filepath)
                              for calculation in calculations]
@@ -383,9 +407,9 @@ class OptimizationManager:
     def remove_old_optimization_tasks_and_tables(self):
         now_date = datetime.now().date()
 
-        optimization_tasks = self.session.query(self.ot)\
-            .filter(or_(self.ot.optimization_state == OPTIMIZATION_FINISH,
-                        self.ot.optimization_state == OPTIMIZATION_ABORT)).all()
+        optimization_tasks = self._session.query(self._ot_model)\
+            .filter(or_(self._ot_model.optimization_state == OPTIMIZATION_FINISH,
+                        self._ot_model.optimization_state == OPTIMIZATION_ABORT)).all()
 
         old_optimization_tasks = []
         for task in optimization_tasks:
@@ -394,19 +418,19 @@ class OptimizationManager:
                 old_optimization_tasks.append(task)
 
         for task in old_optimization_tasks:
-            individual_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
-            individual_oh = get_table_for_optimization_id(self.oh, self.current_optimization_id)
+            individual_ct = get_table_for_optimization_id(self._ct_model, self._current_oid)
+            individual_oh = get_table_for_optimization_id(self._oh_model, self._current_oid)
 
             Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
 
-            self.session.remove(task)
-            self.session.commit()
+            self._session.remove(task)
+            self._session.commit()
 
     def manage_evolutionary_optimization(self):
-        number_of_generations = self.current_optimization_data["parameters"]["ngen"]
-        population_size = self.current_optimization_data["parameters"]["pop_size"]
+        number_of_generations = self._current_odata["parameters"]["ngen"]
+        population_size = self._current_odata["parameters"]["pop_size"]
 
-        population = self.current_eat.make_population(population_size)
+        population = self._current_eat.make_population(population_size)
 
         for generation in range(number_of_generations):
 
@@ -414,31 +438,31 @@ class OptimizationManager:
 
             optimization_task.current_generation = generation + 1  # Table counts to ten
             optimization_task.current_population = 0
-            self.session.commit()
+            self._session.commit()
 
             if generation > 0:
-                summarized_calculation_data, summarized_fitness = self.summarize_finished_calculation_tasks(
+                summarized_individual_odata, summarized_fitness = self.summarize_finished_calculation_tasks(
                     generation=(generation - 1)
                 )
 
                 individuals = [
-                    self.read_optimization_data(single_calculation["optimization"])[2]
-                    for single_calculation in summarized_calculation_data
+                    self.read_optimization_data(optimization_data)[2]
+                    for optimization_data in summarized_individual_odata
                 ]
 
                 fitnesses = [self.linear_scalarization(single_fitness)
                              for single_fitness in summarized_fitness]
 
-                population = self.current_eat.optimize_evolutionary(individuals, fitnesses)
+                population = self._current_eat.optimize_evolutionary(individuals, fitnesses)
 
             self.create_new_calculation_jobs(generation, population)
 
             self.await_generation_finished(generation)
 
-            summarized_calculation_data, summarized_fitness = self.summarize_finished_calculation_tasks(generation)
+            summarized_individual_odata, summarized_fitness = self.summarize_finished_calculation_tasks(generation)
 
-            individuals = [self.read_optimization_data(single_calculation["optimization"])[2]
-                           for single_calculation in summarized_calculation_data]
+            individuals = [self.read_optimization_data(optimization_data)[2]
+                           for optimization_data in summarized_individual_odata]
 
             fitnesses = [self.linear_scalarization(single_fitness)
                          for single_fitness in summarized_fitness]
@@ -447,50 +471,46 @@ class OptimizationManager:
             print()
             print(fitnesses)
 
-            if self.debug:
-                print(f"Generation summarized.")
+            population = self._current_eat.evaluate_finished_calculations(individuals, fitnesses)
 
-            population = self.current_eat.evaluate_finished_calculations(individuals, fitnesses)
+            population = self._current_eat.select_best_individuals(population)
 
-            if self.debug:
-                print(f"Generation evaluated.")
-
-            population = self.current_eat.select_best_individuals(population)
-
-            optimization_history = self.current_oh(
+            optimization_history = self._current_oh(
                 author=optimization_task.author,
                 project=optimization_task.project,
-                optimization_id=self.current_optimization_id,
+                optimization_id=self._current_oid,
                 generation=(generation + 1),
                 scalar_fitness=self.linear_scalarization(
-                    self.current_eat.select_nth_of_hall_of_fame(1)[0].fitness.values)
+                    self._current_eat.select_nth_of_hall_of_fame(1)[0].fitness.values)
             )
 
-            self.session.add(optimization_history)
-            self.session.commit()
+            self._session.add(optimization_history)
+            self._session.commit()
 
-            if self.debug:
-                print("Generation selected.")
-
-        return self.current_eat.select_nth_of_hall_of_fame(
-            self.current_data["optimization"]["parameters"]["number_of_solutions"])
+        return self._current_eat.select_nth_of_hall_of_fame(
+            self._current_odata["parameters"]["number_of_solutions"])
 
     def manage_linear_optimization(self):
-        # def custom_linear_optimization_queue(individual):
-        #     return self.linear_optimization_queue(individual)
+        """ Manager for linear optimizations. It only calls the linear optimization function of the ea toolbox and
+        passes it the solution as given by the optimization data along with the linear optimization queue function
+        which manages to distribute a calculation tasks and also summarizes the solution. This has to happen all in one,
+        as the linear optimization function NSGA2 doesn't have any kind of generations and just continues until a
+        certain threshold is undergone.
 
-        solution = self.current_eat.optimize_linear(solution=self.current_data["optimization"]["result"],
-                                                    function=self.linear_optimization_queue)
-
-        if self.debug:
-            print("Solution linear optimized.")
-            print(f"Solution: {solution}")
-
-        return solution
+        :return:
+        """
+        return self._current_eat.optimize_linear(solution=self._current_odata["result"],
+                                                 function=self.linear_optimization_queue)
 
     def manage_any_optimization(self):
-        optimization_task = self.session.query(self.ot)\
-            .filter(self.ot.optimization_id == self.current_optimization_id).first()
+        """ Manager for any kind of optimization that handles both offered types (genetic and linear). Primarily this
+        method was introduced to separate the two methods and have only one function call that divides depending on
+        the current optimization task.
+
+        :return:
+        """
+        optimization_task = self._session.query(self._ot_model)\
+            .filter(self._ot_model.optimization_id == self._current_oid).first()
 
         assert optimization_task.optimization_type in ["GA", "LO"], "Error: optimization_type is neither 'GA' nor 'LO'"
 
@@ -512,45 +532,53 @@ class OptimizationManager:
         """
 
         while True:
-            new_optimization_task = self.query_first_starting_optimization_task()
 
-            if new_optimization_task:
-                print(f"Working on task with id: {new_optimization_task.optimization_id}")
+            if self.first_starting_ot:
+                print(f"Working on task with id: {self.first_starting_ot.optimization_id}")
 
-                self.current_optimization_id = new_optimization_task.optimization_id
+                self._current_oid = self.first_starting_ot.optimization_id
 
-                optimization_task = self.query_current_optimization_task()
+                optimization_task = self.current_ot
                 optimization_task.optimization_state = OPTIMIZATION_RUN
-                self.session.commit()
+                self._session.commit()
 
                 # Set temporary attributes
-                self.current_data = load_json(new_optimization_task.data_filepath)
+                request_data = load_json(optimization_task.data_filepath)
+
+                self._current_rdata = {
+                    request_data[key]
+                    for key in request_data
+                    if key not in ["optimization", "data"]
+                }
+
+                self._current_odata = request_data["optimization"]
+                self._current_mdata = request_data["data"]
 
                 variable_map, variable_bounds, _ = self.read_optimization_data()
 
-                self.current_variable_map = variable_map
+                self._current_vmap = variable_map
 
                 # Set temporary attributes2
-                self.current_eat = self.ea_toolbox(
+                self._current_eat = self._ea_toolbox(
                     bounds=variable_bounds,
-                    weights=self.get_weights(),  # from self.optimization_data
-                    parameters=self.current_data["optimization"]["parameters"]
+                    weights=self.optimization_weights,  # from self.optimization_data
+                    parameters=self._current_odata["parameters"]
                 )
-                self.current_oh = get_table_for_optimization_id(self.oh, self.current_optimization_id)
-                self.current_ct = get_table_for_optimization_id(self.ct, self.current_optimization_id)
+                self._current_oh = get_table_for_optimization_id(self._oh_model, self._current_oid)
+                self._current_ct = get_table_for_optimization_id(self._ct_model, self._current_oid)
 
                 Base.metadata.create_all(bind=engine,
-                                         tables=[self.current_ct.__table__,
-                                                 self.current_oh.__table__],
+                                         tables=[self._current_ct.__table__,
+                                                 self._current_oh.__table__],
                                          checkfirst=True)
 
                 solution = self.manage_any_optimization()
 
-                optimization_task = self.query_current_optimization_task()
+                optimization_task = self.current_ot
 
                 optimization_task.solution = solution
                 optimization_task.optimization_state = OPTIMIZATION_FINISH
-                self.session.commit()
+                self._session.commit()
 
                 # Remove single job properties
                 self.remove_optimization_and_calculation_data()
@@ -571,8 +599,7 @@ if __name__ == '__main__':
         ea_toolbox=EAToolbox,
         optimization_task=OptimizationTask,
         calculation_task=CalculationTask,
-        optimization_history=OptimizationHistory,
-        debug=True
+        optimization_history=OptimizationHistory
     )
 
     optimization_manager.run()

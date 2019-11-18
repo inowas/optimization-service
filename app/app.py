@@ -1,7 +1,8 @@
+from pathlib import Path
 from flask import Flask
 from flask_cors import CORS
 from views import optimization_blueprint
-from config import DATABASE_URL
+from config import DATABASE_URL, OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER
 from models import Base, OptimizationTask
 from db import engine
 from time import sleep
@@ -9,6 +10,16 @@ from time import sleep
 
 sleep(10)
 
+# Folders for optimization / calculation
+try:
+    Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER).mkdir()
+except FileExistsError:
+    pass
+
+try:
+    Path(OPTIMIZATION_DATA, CALCULATION_FOLDER).mkdir()
+except FileExistsError:
+    pass
 
 # Create a flask app
 app = Flask(__name__)

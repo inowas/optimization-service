@@ -14,7 +14,8 @@ from shutil import rmtree
 from helper_functions import create_input_and_output_filepath, load_json, write_json
 from db import Session
 from models import OptimizationTask, OptimizationHistory
-from config import DATA_FILE, JSON_SCHEMA_MODFLOW_OPTIMIZATION, OPTIMIZATION_RUN, OPTIMIZATION_DATA
+from config import DATA_FILE, JSON_SCHEMA_MODFLOW_OPTIMIZATION, OPTIMIZATION_RUN, \
+    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -60,9 +61,8 @@ def upload_file() -> jsonify:
         total_generation = request_data["optimization"]["parameters"]["ngen"]
 
         # Create folder named after task_id in optimization_data folder
-        data_filepath = create_input_and_output_filepath(folder=OPTIMIZATION_DATA,
-                                                         task_id=optimization_id,
-                                                         file_types=[DATA_FILE])[0]
+        data_filepath = create_input_and_output_filepath(folder=Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER),
+                                                         task_id=optimization_id)
 
         optimizationtask = OptimizationTask(
                                 author=author,

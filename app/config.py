@@ -7,10 +7,19 @@ JSON_SCHEMA_MODFLOW_OPTIMIZATION = "./json_schema/schema_modflow_optimization.js
 
 # Folder for optimization data
 OPTIMIZATION_DATA = "/optimization-data/"
-# CALCULATION_DATA = "/calculation-data/"
+# optimization folder
+OPTIMIZATION_FOLDER = "optimization"
+# calculation folder
+CALCULATION_FOLDER = "calculation"
 
-# Data ext
-DATA_FILE = "data"
+# folder for parameters
+INDIVIDUAL_ODATA_FOLDER = "individual_optimization_data"
+
+# Optimization data name
+ODATA_FILENAME = "optimization_data"
+
+# Model data name
+MDATA_FILENAME = "model_data"
 
 # Calculation input ext
 CALC_INPUT_EXT = "_input"
