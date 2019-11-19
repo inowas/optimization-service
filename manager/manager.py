@@ -1,25 +1,26 @@
+from typing import Tuple, List, Optional
 from copy import deepcopy
+from pathlib import Path
 from time import sleep
 from datetime import datetime
 import pandas as pd
-from pathlib import Path
 from uuid import uuid4
 from sqlalchemy import or_
 from sqlalchemy.exc import DBAPIError
-from typing import Tuple, List, Optional
-from .evolutionary_toolbox import EAToolbox
 from flopyAdapter import ModflowDataModel, FlopyFitnessAdapter
 
-import os.path
+from manager.evolutionary_toolbox import EAToolbox
+
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), 'opt_app'))
-from helper_functions import create_input_and_output_filepath, load_json, write_json, \
-    get_table_for_optimization_id   # noqa: E402
+sys.path.append(Path(__file__).resolve().parent / 'opt_app')
+from app.helpers.functions import create_input_and_output_filepath, load_json, write_json, \
+    get_table_for_optimization_id, get_schema_and_refresolver   # noqa: E402
 from db import Session, engine  # noqa: E402
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory  # noqa: E402
-from config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_ODATA_FOLDER, \
+from app.helpers.config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_ODATA_FOLDER, \
     OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, OPTIMIZATION_FINISH, \
-    MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, ODATA_FILENAME, MDATA_FILENAME, JSON_ENDING  # noqa: E402
+    MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, ODATA_FILENAME, MDATA_FILENAME, JSON_ENDING, \
+    SCHEMA_MODFLOW_MODEL_DATA  # noqa: E402
 
 
 class OptimizationManager:
@@ -40,7 +41,7 @@ class OptimizationManager:
 
         # Json schema for calculation data
         self._schema = None
-        self._resolver = None
+        self._refresolver = None
 
         # Temporary attributes (used for one optimization and then overwritten)
         self._current_oid = None
@@ -89,6 +90,14 @@ class OptimizationManager:
 
         return optimization_data
 
+    @staticmethod
+    def create_unique_id():
+        """ Function to generate a unique id for each calculation task
+
+        :return:
+        """
+        return str(uuid4())
+
     # Author: Aybulat Fatkhutdinov; modified
     def read_optimization_data(self,
                                optimization_data: dict = None):
@@ -109,60 +118,76 @@ class OptimizationManager:
 
         for object_ in optimization_data["objects"]:
             for parameter, value in object_.items():
-                if parameter == 'position':
-                    for axis, axis_data in value.items():
-                        if axis_data['min'] != axis_data['max']:
-                            var_map.append((object_['id'], 'position', axis))
-                            var_bounds.append((axis_data['min'], axis_data['max']))
-                            initial_value = axis_data.get('result')
-                            if initial_value is None:
-                                initial_values.append(int((axis_data['max'] + axis_data['min']) / 2))
-                            else:
-                                initial_values.append(initial_value)
-                            object_['position'][axis]['result'] = None
-                        else:
-                            object_['position'][axis]['result'] = axis_data['min']
+                for axis_or_period, data in value.items():
+                    try:
+                        if data['min'] != data['max']:
+                            var_map.append((object_['id'], 'position', axis_or_period))
+                            var_bounds.append((data['min'], data['max']))
+                            initial_values.append(
+                                data.get('result', (data['max'] + data['min']) // 2))
 
-                elif parameter == 'flux':
-                    for period, period_data in value.items():
-                        if period_data['min'] != period_data['max']:
-                            var_map.append((object_['id'], 'flux', period))
-                            var_bounds.append((period_data['min'], period_data['max']))
-                            initial_value = period_data.get('result')
-                            if initial_value is None:
-                                initial_values.append((period_data['max'] + period_data['min']) / 2)
-                            else:
-                                initial_values.append(initial_value)
-                            object_['flux'][period]['result'] = None
+                            object_['position'][axis_or_period]['result'] = None
                         else:
-                            object_['flux'][period]['result'] = period_data['min']
+                            object_['position'][axis_or_period]['result'] = data['min']
 
-                elif parameter == 'concentration':
-                    for period, period_data in value.items():
-                        for component, component_data in period_data.items():
+                    except KeyError:
+                        for component, component_data in data.items():
                             if component_data['min'] != component_data['max']:
-                                var_map.append((object_['id'], 'concentration', period, component))
+                                var_map.append((object_['id'], 'concentration', axis_or_period, component))
                                 var_bounds.append((component_data['min'], component_data['max']))
-                                initial_value = component_data.get('result')
-                                if initial_value is None:
-                                    initial_values.append((component_data['max'] + component_data['min']) / 2)
-                                else:
-                                    initial_values.append(initial_value)
-                                object_[parameter][period][component]['result'] = None
+                                initial_values.append(
+                                    component_data.get('result', (data['max'] + data['min']) // 2))
+
+                                object_[parameter][axis_or_period][component]['result'] = None
                             else:
-                                object_[parameter][period][component]['result'] = component_data['min']
+                                object_[parameter][axis_or_period][component]['result'] = component_data['min']
+
+        # for object_ in optimization_data["objects"]:
+        #     for parameter, value in object_.items():
+        #         if parameter == 'position':
+        #             for axis, axis_data in value.items():
+        #                 if axis_data['min'] != axis_data['max']:
+        #                     var_map.append((object_['id'], 'position', axis))
+        #                     var_bounds.append((axis_data['min'], axis_data['max']))
+        #                     initial_value = axis_data.get('result')
+        #                     if initial_value is None:
+        #                         initial_values.append(int((axis_data['max'] + axis_data['min']) / 2))
+        #                     else:
+        #                         initial_values.append(initial_value)
+        #                     object_['position'][axis]['result'] = None
+        #                 else:
+        #                     object_['position'][axis]['result'] = axis_data['min']
+        #
+        #         elif parameter == 'flux':
+        #             for period, period_data in value.items():
+        #                 if period_data['min'] != period_data['max']:
+        #                     var_map.append((object_['id'], 'flux', period))
+        #                     var_bounds.append((period_data['min'], period_data['max']))
+        #                     initial_value = period_data.get('result')
+        #                     if initial_value is None:
+        #                         initial_values.append((period_data['max'] + period_data['min']) / 2)
+        #                     else:
+        #                         initial_values.append(initial_value)
+        #                     object_['flux'][period]['result'] = None
+        #                 else:
+        #                     object_['flux'][period]['result'] = period_data['min']
+        #
+        #         elif parameter == 'concentration':
+        #             for period, period_data in value.items():
+        #                 for component, component_data in period_data.items():
+        #                     if component_data['min'] != component_data['max']:
+        #                         var_map.append((object_['id'], 'concentration', period, component))
+        #                         var_bounds.append((component_data['min'], component_data['max']))
+        #                         initial_value = component_data.get('result')
+        #                         if initial_value is None:
+        #                             initial_values.append((component_data['max'] + component_data['min']) / 2)
+        #                         else:
+        #                             initial_values.append(initial_value)
+        #                         object_[parameter][period][component]['result'] = None
+        #                     else:
+        #                         object_[parameter][period][component]['result'] = component_data['min']
 
         return var_map, var_bounds, initial_values
-
-    @staticmethod
-    def create_unique_id() -> str:
-        """ Function to create a unique id for calculation jobs
-
-        Returns:
-             unique id (uuid4) - a unique id to identify a calculation job
-
-        """
-        return str(uuid4())
 
     @property
     def optimization_weights(self) -> tuple:
@@ -234,7 +259,7 @@ class OptimizationManager:
             individual_odata = create_input_and_output_filepath(
                 folder=Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER,
                             self.current_ot.optimization_id, INDIVIDUAL_ODATA_FOLDER),
-                task_id=calculation.calculation_id2,
+                task_id=calculation.calculation_id,
                 file_name=[ODATA_FILENAME],
                 file_type=JSON_ENDING
             )[0]
@@ -242,7 +267,7 @@ class OptimizationManager:
             summarized_individual_odata.append(load_json(individual_odata))
 
             flopyfitnessadapter = FlopyFitnessAdapter.from_id(self._current_odata,
-                                                              calculation.calculation_id2,
+                                                              calculation.calculation_id,
                                                               OPTIMIZATION_DATA)
             summarized_fitness.append(flopyfitnessadapter.get_fitness())
 
@@ -278,20 +303,13 @@ class OptimizationManager:
         :return:
         """
 
-        optimization_task = self.current_ot
-
-        # todo store individual parameters somewhere so that we can obtain this later after calculation to get
-        # todo parameters with their fitness
-
         individual_odata = self.apply_individual(optimization_data=deepcopy(self._current_odata),
                                                  individual=individual,
                                                  variable_map=self._current_vmap)
 
-        calculation_id = self.create_unique_id()
-
         modflowdatamodel = ModflowDataModel.from_data(data=self._current_mdata,
                                                       schema=self._schema,
-                                                      resolver=self._resolver)
+                                                      resolver=self._refresolver)
 
         modflowdatamodel.add_objects(objects=individual_odata["objects"])
 
@@ -314,10 +332,10 @@ class OptimizationManager:
             write_json(obj=individual_odata,
                        filepath=parameter_set_filepath)
 
-            existing_jobs_with_same_calculation_id2 = self._session.query(self._current_ct)\
-                .filter(self._current_ct.calculation_id2 == modflowdatamodel.md5_hash).all()
+            existing_jobs_with_cid = self._session.query(self._current_ct)\
+                .filter(self._current_ct.calculation_id == modflowdatamodel.md5_hash).all()
 
-            if not existing_jobs_with_same_calculation_id2:
+            if not existing_jobs_with_cid:
                 write_json(obj=modflowdatamodel.data,
                            filepath=calculation_data_filepath)
 
@@ -325,8 +343,8 @@ class OptimizationManager:
                 author=self.current_ot.author,
                 project=self.current_ot.project,
                 optimization_id=self.current_ot.optimization_id,
-                calculation_id=calculation_id,
-                calculation_id2=modflowdatamodel.md5_hash,
+                calculation_id=self.create_unique_id(),
+                data_hash=modflowdatamodel.md5_hash,
                 calculation_type=self.current_ot.optimization_type,
                 calculation_state=CALCULATION_START,  # Set state to start
                 generation=generation,
@@ -550,15 +568,17 @@ class OptimizationManager:
                     for key in request_data
                     if key not in ["optimization", "data"]
                 }
-
                 self._current_odata = request_data["optimization"]
                 self._current_mdata = request_data["data"]
+
+                # Set temporary schema, solver
+                self._schema = self._refresolver = get_schema_and_refresolver(SCHEMA_MODFLOW_MODEL_DATA)
 
                 variable_map, variable_bounds, _ = self.read_optimization_data()
 
                 self._current_vmap = variable_map
 
-                # Set temporary attributes2
+                # Set temporary attributes
                 self._current_eat = self._ea_toolbox(
                     bounds=variable_bounds,
                     weights=self.optimization_weights,  # from self.optimization_data

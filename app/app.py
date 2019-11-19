@@ -1,11 +1,14 @@
 from pathlib import Path
 from flask import Flask
 from flask_cors import CORS
+
 from views import optimization_blueprint
-from config import DATABASE_URL, OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER
 from models import Base, OptimizationTask
 from db import engine
 from time import sleep
+
+from app.helpers.config import DATABASE_URL, OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER
+
 # https://www.compose.com/articles/using-postgresql-through-sqlalchemy/
 
 sleep(10)

@@ -1,11 +1,12 @@
-from config import OPTIMIZATION_DATA, JSON_ENDING
-import json
-from pathlib import Path
-from typing import Union
-from copy import deepcopy
-from sqlalchemy.ext.declarative import declarative_base
+from typing import Union, List
 from uuid import uuid4
-from typing import List
+import json
+from jsonschema import RefResolver
+from pathlib import Path, PurePosixPath
+from urllib.request import urlopen
+from sqlalchemy.ext.declarative import declarative_base
+
+from app.helpers.config import HTTPS_STRING
 
 
 def create_input_and_output_filepath(folder: Union[str, Path],
@@ -48,3 +49,16 @@ def get_table_for_optimization_id(table_class,
             super().__init__(**args)
 
     return IndividualTaskTable
+
+
+def get_schema_and_refresolver(schema_path):
+    assert isinstance(schema_path, PurePosixPath), \
+        f"Error: schema_path requires a PurePosixPath, not {type(schema_path)}."
+
+    with urlopen(f"{HTTPS_STRING}{schema_path}") as f:
+        schema_data = json.load(f)
+
+    refresolver = RefResolver(f"{HTTPS_STRING}{schema_path}",
+                              referrer=schema_data)
+
+    return schema_data, refresolver

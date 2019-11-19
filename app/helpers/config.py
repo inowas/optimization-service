@@ -1,9 +1,15 @@
+from pathlib import PurePosixPath
+
 # Database to our optimization postgres
 DATABASE_URL = "postgresql+psycopg2://root:root@postgres:5432/optimization"
 
+# JSON_SCHEMA_UPLOAD = "./json_schema/schema_upload.json"
+# JSON_SCHEMA_MODFLOW_OPTIMIZATION = "./json_schema/schema_modflow_optimization.json"
+HTTPS_STRING = "https://"
 # Schema that has to be validated against the uploaded json
-JSON_SCHEMA_UPLOAD = "./json_schema/schema_upload.json"
-JSON_SCHEMA_MODFLOW_OPTIMIZATION = "./json_schema/schema_modflow_optimization.json"
+SCHEMA_INOWAS_OPTIMIZATION = PurePosixPath("schema.inowas.com/optimization/optimization_project.json")
+# Schema explicitly for the modflowmodeldata
+SCHEMA_MODFLOW_MODEL_DATA = PurePosixPath("schema.inowas.com/modflow/packages/modflow_model_data.json")
 
 # Folder for optimization data
 OPTIMIZATION_DATA = "/optimization-data/"
@@ -56,3 +62,5 @@ OPTIMIZATION_TYPE_EVOLUTION = "GA"
 OPTIMIZATION_TYPE_LINEAR = "LO"
 
 MAX_STORING_TIME_OPTIMIZATION_TASKS = 20  # in days
+
+MISSING_DATA_VALUE = -9999

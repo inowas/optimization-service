@@ -1,20 +1,21 @@
+from io import BytesIO
+from shutil import rmtree
+from pathlib import Path
+import json
+from jsonschema import ValidationError, SchemaError, Draft7Validator
+import pandas as pd
+import matplotlib.pyplot as plt
+
 from flask import Blueprint
 from flask import request, render_template, jsonify, redirect, abort
 from flask import Response
 from flask_cors import cross_origin
-import json
-from jsonschema import validate, ValidationError, SchemaError
-from pathlib import Path
-import pandas as pd
-import matplotlib.pyplot as plt
-from io import BytesIO
-from helper_functions import get_table_for_optimization_id
-from shutil import rmtree
-
-from helper_functions import create_input_and_output_filepath, load_json, write_json
 from db import Session
 from models import OptimizationTask, OptimizationHistory
-from config import DATA_FILE, JSON_SCHEMA_MODFLOW_OPTIMIZATION, OPTIMIZATION_RUN, \
+
+from app.helpers.functions import get_table_for_optimization_id, create_input_and_output_filepath, \
+    write_json, get_schema_and_resolver
+from app.helpers.config import SCHEMA_INOWAS_OPTIMIZATION, OPTIMIZATION_RUN, \
     OPTIMIZATION_DATA, OPTIMIZATION_FOLDER
 
 optimization_blueprint = Blueprint("optimization", __name__)
@@ -33,11 +34,10 @@ def upload_file() -> jsonify:
         file_upload = request.files["file"]
         request_data = json.load(file_upload)
 
-        schema_upload = load_json(JSON_SCHEMA_MODFLOW_OPTIMIZATION)
+        optimization_schema, refresolver = get_schema_and_resolver(SCHEMA_INOWAS_OPTIMIZATION)
 
         try:
-            validate(instance=request_data,
-                     schema=schema_upload)
+            Draft7Validator(schema=optimization_schema, resolver=refresolver).validate(request_data)
 
         except ValidationError as e:
             error = {
@@ -174,5 +174,3 @@ def show_single_optimization_progress(optimization_id_):
             return abort(404, f"Optimization with id {optimization_id_} isn't running. Progress graph not available!")
 
         return abort(404, f"Optimization with id {optimization_id_} does not exist.")
-
-    pass
