@@ -1,15 +1,17 @@
+import os.path
 from pathlib import Path
 from time import sleep
 from sqlalchemy import and_
 from flopyAdapter import ModflowDataModel, FlopyModelManager
 import sys
-sys.path.append(Path(__file__).resolve().parent / 'opt_app')
+sys.path.append(os.path.join(os.path.dirname(__file__), "opt_app"))
 from db import Session  # noqa: E402
 from models import CalculationTask, OptimizationTask  # noqa: E402
 
-from app.helpers.functions import load_json, get_table_for_optimization_id  # noqa: E402
-from app.helpers.config import OPTIMIZATION_RUN, CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH, \
-    OPTIMIZATION_TYPE_EVOLUTION, MISSING_DATA_VALUE  # noqa: E402
+from helpers.functions import load_json, get_table_for_optimization_id  # noqa: E402
+from helpers.config import OPTIMIZATION_RUN, CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH, \
+    OPTIMIZATION_TYPE_EVOLUTION, MISSING_DATA_VALUE, MDATA_FILENAME, OPTIMIZATION_DATA, CALCULATION_FOLDER, \
+    JSON_ENDING  # noqa: E402
 
 
 class WorkerManager:
@@ -26,12 +28,12 @@ class WorkerManager:
         # Temporary attributes
         self._current_oid = None
         self._current_data_hash = None
-        self._current_ct = None
+        # self._current_ct = None
 
     def reset_temporary_attributes(self):
         self._current_oid = None
         self._current_data_hash = None
-        self._current_ct = None
+        # self._current_ct = None
 
     @property
     def first_starting_ct(self) -> Session.query:
@@ -41,14 +43,14 @@ class WorkerManager:
             query - first optimization task in list
 
         """
-        return self._session.query(self._current_ct)\
-            .filter(self._current_ct.calculation_state == CALCULATION_START).first()
+        return self._session.query(self._ct_model)\
+            .filter(self._ct_model.calculation_state == CALCULATION_START).first()
 
     @property
     def current_ct(self) -> Session.query:
 
-        return self._session.query(self._current_ct).\
-            filter(self._current_ct.data_hash == self._current_data_hash).first()
+        return self._session.query(self._ct_model).\
+            filter(self._ct_model.data_hash == self._current_data_hash).first()
 
     @property
     def current_ot(self) -> Session.query:
@@ -59,9 +61,9 @@ class WorkerManager:
     @property
     def any_finished_ct_with_same_id(self):
 
-        return self._session.query(self._current_ct). \
-            filter(and_(self._current_ct.data_hash == self._current_data_hash,
-                        self._current_ct.calculation_state == CALCULATION_FINISH)).first()
+        return self._session.query(self._ct_model). \
+            filter(and_(self._ct_model.data_hash == self._current_data_hash,
+                        self._ct_model.calculation_state == CALCULATION_FINISH)).first()
 
     def run(self):
         while True:
@@ -75,7 +77,7 @@ class WorkerManager:
                     self._current_data_hash = self.first_starting_ct.data_hash
 
                     existing_jobs_with_cid = self._session.query(self._ct_model)\
-                        .filter(self._current_ct.data_hash == self._current_data_hash).all()
+                        .filter(self._ct_model.data_hash == self._current_data_hash).all()
 
                     for job in existing_jobs_with_cid:
                         job.calculation_state = CALCULATION_RUN
@@ -83,7 +85,9 @@ class WorkerManager:
                     self._session.commit()
 
                     if not self.any_finished_ct_with_same_id:
-                        calculation_data = load_json(self.current_ct.calculation_data)
+                        calculation_data_filepath = (Path(OPTIMIZATION_DATA) / CALCULATION_FOLDER /
+                                                     self._current_data_hash / f"{MDATA_FILENAME}{JSON_ENDING}")
+                        calculation_data = load_json(calculation_data_filepath)
 
                         # data was already validated by optimization manager
                         modflowdatamodel = ModflowDataModel(calculation_data)
@@ -98,7 +102,7 @@ class WorkerManager:
                         job.calculation_state = CALCULATION_FINISH
 
                         if self.current_ct.calculation_type == OPTIMIZATION_TYPE_EVOLUTION:
-                            self.current_ct.current_population += 1
+                            self.current_ot.current_population += 1
 
                     self._session.commit()
 

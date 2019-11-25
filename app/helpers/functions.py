@@ -6,15 +6,15 @@ from pathlib import Path, PurePosixPath
 from urllib.request import urlopen
 from sqlalchemy.ext.declarative import declarative_base
 
-from app.helpers.config import HTTPS_STRING
+from helpers.config import HTTPS_STRING
 
 
 def create_input_and_output_filepath(folder: Union[str, Path],
                                      task_id: Union[str, uuid4],
                                      file_name: List[str] = None,
                                      file_type: str = ""):
-    if not Path(folder, task_id).is_dir():
-        raise NotADirectoryError(f"Error: the folder {folder} does not exist.")
+    # if not Path(folder, task_id).is_dir():
+    #     raise NotADirectoryError(f"Error: the folder {folder} does not exist.")
 
     # Create a filepath to that id
     if not file_name:

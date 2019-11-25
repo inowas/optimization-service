@@ -2,7 +2,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, Integer, Float, ARRAY
 from datetime import datetime
 
-from app.helpers.config import INITIAL_SCALAR_FITNESS
+from helpers.config import INITIAL_SCALAR_FITNESS
 
 
 # Basically our empty database with its models gets the information to which existing database to connect
@@ -75,7 +75,7 @@ class CalculationTask:
     generation = Column(Integer)
     individual_id = Column(Integer)
     calculation_data_filepath = Column(String)
-    fitness = Column(ARRAY)
+    fitness = Column(ARRAY(Float))
 
     def __init__(self, author, project, optimization_id, calculation_id, data_hash, calculation_type, calculation_state,
                  generation, calculation_data_filepath, **args):

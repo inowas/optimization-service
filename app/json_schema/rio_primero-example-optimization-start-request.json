@@ -15,8 +15,7 @@
       "diversity_flg": true,
       "ncls": 3,
       "maxf": 10,
-      "qbound": 0.25,
-      "number_of_solutions": 3
+      "qbound": 0.25
     },
     "objectives": [
       {
@@ -26,30 +25,30 @@
         "penalty_value": 999,
         "location": {
           "type": "bbox",
-          "ts": [
-            0,
-            9
-          ],
-          "lay": [
-            0,
-            0
-          ],
-          "row": [
-            20,
-            20
-          ],
-          "col": [
-            45,
-            45
-          ]
+          "ts": {
+            "min": 0,
+            "max": 9
+          },
+          "lay": {
+            "min": 0,
+            "max": 0
+          },
+          "row": {
+            "min": 20,
+            "max": 20
+          },
+          "col": {
+            "min": 45,
+            "max": 45
+          }
         }
       }
     ],
     "constraints": [],
     "objects": [
       {
-        "id": 0,
-        "type": "well",
+        "id": "c63bcbf5-868e-43e5-aa6c-d68e67c3cc01",
+        "type": "wel",
         "position": {
           "row": {
             "min": 10,
@@ -72,8 +71,8 @@
         }
       },
       {
-        "id": 1,
-        "type": "well",
+        "id": "2e3e00b1-d2f9-4167-be8e-350f8ea9f6d2",
+        "type": "wel",
         "position": {
           "row": {
             "min": 10,

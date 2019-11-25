@@ -13,10 +13,10 @@ from flask_cors import cross_origin
 from db import Session
 from models import OptimizationTask, OptimizationHistory
 
-from app.helpers.functions import get_table_for_optimization_id, create_input_and_output_filepath, \
-    write_json, get_schema_and_resolver
-from app.helpers.config import SCHEMA_INOWAS_OPTIMIZATION, OPTIMIZATION_RUN, \
-    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER
+from helpers.functions import get_table_for_optimization_id, create_input_and_output_filepath, \
+    write_json, get_schema_and_refresolver
+from helpers.config import SCHEMA_INOWAS_OPTIMIZATION, OPTIMIZATION_RUN, \
+    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, JSON_ENDING
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -34,7 +34,7 @@ def upload_file() -> jsonify:
         file_upload = request.files["file"]
         request_data = json.load(file_upload)
 
-        optimization_schema, refresolver = get_schema_and_resolver(SCHEMA_INOWAS_OPTIMIZATION)
+        optimization_schema, refresolver = get_schema_and_refresolver(SCHEMA_INOWAS_OPTIMIZATION)
 
         try:
             Draft7Validator(schema=optimization_schema, resolver=refresolver).validate(request_data)
@@ -54,7 +54,7 @@ def upload_file() -> jsonify:
         author = request_data.get("author", "unknown")
         project = request_data.get("project", "unknown")
         optimization_id = request_data["optimization_id"]
-        optimization_state = request_data["type"]
+        optimization_state = request_data.get("type", "optimization_start")  # expect optimization_stop, otherwise start
 
         method = request_data["optimization"]["parameters"]["method"]
         population_size = request_data["optimization"]["parameters"]["pop_size"]
@@ -62,7 +62,10 @@ def upload_file() -> jsonify:
 
         # Create folder named after task_id in optimization_data folder
         data_filepath = create_input_and_output_filepath(folder=Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER),
-                                                         task_id=optimization_id)
+                                                         task_id=optimization_id)[0]
+
+        data_filepath = (Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER / optimization_id /
+                         f"optimization{JSON_ENDING}")
 
         optimizationtask = OptimizationTask(
                                 author=author,
@@ -73,8 +76,13 @@ def upload_file() -> jsonify:
                                 total_population=population_size,
                                 total_generation=total_generation,
                                 solution=dict(),
-                                data_filepath=data_filepath
+                                data_filepath=str(data_filepath)
                             )
+
+        try:
+            Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, optimization_id).mkdir(parents=True)
+        except FileExistsError:
+            pass
 
         try:
             write_json(obj=request_data,

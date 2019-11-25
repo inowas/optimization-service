@@ -1,3 +1,4 @@
+import os.path
 from typing import Tuple, List, Optional
 from copy import deepcopy
 from pathlib import Path
@@ -5,19 +6,19 @@ from time import sleep
 from datetime import datetime
 import pandas as pd
 from uuid import uuid4
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.exc import DBAPIError
 from flopyAdapter import ModflowDataModel, FlopyFitnessAdapter
 
-from manager.evolutionary_toolbox import EAToolbox
+from evolutionary_toolbox import EAToolbox
 
 import sys
-sys.path.append(Path(__file__).resolve().parent / 'opt_app')
-from app.helpers.functions import create_input_and_output_filepath, load_json, write_json, \
+sys.path.append(os.path.join(os.path.dirname(__file__), "opt_app"))
+from helpers.functions import create_input_and_output_filepath, load_json, write_json, \
     get_table_for_optimization_id, get_schema_and_refresolver   # noqa: E402
 from db import Session, engine  # noqa: E402
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory  # noqa: E402
-from app.helpers.config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_ODATA_FOLDER, \
+from helpers.config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_ODATA_FOLDER, \
     OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, OPTIMIZATION_FINISH, \
     MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, ODATA_FILENAME, MDATA_FILENAME, JSON_ENDING, \
     SCHEMA_MODFLOW_MODEL_DATA  # noqa: E402
@@ -36,8 +37,11 @@ class OptimizationManager:
 
         # Preset tables
         self._ot_model = optimization_task
-        self._oh_model = optimization_history
-        self._ct_model = calculation_task
+        self._oh_model_template = optimization_history
+        self._oh_model = None
+        self._ct_model_template = calculation_task
+        self._ct_model = None
+        # self._ct_model = calculation_task
 
         # Json schema for calculation data
         self._schema = None
@@ -53,8 +57,8 @@ class OptimizationManager:
         self._current_vmap = None  # variable map
 
         self._current_eat = None
-        self._current_oh = None
-        self._current_ct = None
+        # self._current_oh = None
+        # self._current_ct = None
 
     def reset_temporary_attributes(self):
         self._current_oid = None
@@ -65,8 +69,8 @@ class OptimizationManager:
         self._current_vmap = None
 
         self._current_eat = None
-        self._current_oh = None
-        self._current_ct = None
+        # self._current_oh = None
+        # self._current_ct = None
 
     # Author: Aybulat Fatkhutdinov; modified
     @staticmethod
@@ -118,29 +122,30 @@ class OptimizationManager:
 
         for object_ in optimization_data["objects"]:
             for parameter, value in object_.items():
-                for axis_or_period, data in value.items():
-                    try:
-                        if data['min'] != data['max']:
-                            var_map.append((object_['id'], 'position', axis_or_period))
-                            var_bounds.append((data['min'], data['max']))
-                            initial_values.append(
-                                data.get('result', (data['max'] + data['min']) // 2))
-
-                            object_['position'][axis_or_period]['result'] = None
-                        else:
-                            object_['position'][axis_or_period]['result'] = data['min']
-
-                    except KeyError:
-                        for component, component_data in data.items():
-                            if component_data['min'] != component_data['max']:
-                                var_map.append((object_['id'], 'concentration', axis_or_period, component))
-                                var_bounds.append((component_data['min'], component_data['max']))
+                if parameter in ["position", "flux", "concentration"]:
+                    for axis_or_period, data in value.items():
+                        try:
+                            if data['min'] != data['max']:
+                                var_map.append((object_['id'], 'position', axis_or_period))
+                                var_bounds.append((data['min'], data['max']))
                                 initial_values.append(
-                                    component_data.get('result', (data['max'] + data['min']) // 2))
+                                    data.get('result', (data['max'] + data['min']) // 2))
 
-                                object_[parameter][axis_or_period][component]['result'] = None
+                                object_[parameter][axis_or_period]['result'] = None
                             else:
-                                object_[parameter][axis_or_period][component]['result'] = component_data['min']
+                                object_[parameter][axis_or_period]['result'] = data['min']
+
+                        except KeyError:
+                            for component, component_data in data.items():
+                                if component_data['min'] != component_data['max']:
+                                    var_map.append((object_['id'], 'concentration', axis_or_period, component))
+                                    var_bounds.append((component_data['min'], component_data['max']))
+                                    initial_values.append(
+                                        component_data.get('result', (data['max'] + data['min']) // 2))
+
+                                    object_[parameter][axis_or_period][component]['result'] = None
+                                else:
+                                    object_[parameter][axis_or_period][component]['result'] = component_data['min']
 
         # for object_ in optimization_data["objects"]:
         #     for parameter, value in object_.items():
@@ -238,9 +243,9 @@ class OptimizationManager:
         :return:
         """
 
-        return self._session.query(self._current_ct).\
-            filter(self._current_ct.generation == generation,
-                   self._current_ct.calculation_state == CALCULATION_FINISH).all()
+        return self._session.query(self._ct_model).\
+            filter(self._ct_model.generation == generation,
+                   self._ct_model.calculation_state == CALCULATION_FINISH).all()
 
     def summarize_finished_calculation_tasks(self,
                                              generation: int) -> Tuple[List[dict], list]:
@@ -285,10 +290,10 @@ class OptimizationManager:
         total_population = total_population or self.current_ot.total_population
 
         while True:
-            current_population = self._session.query(self._current_ct).\
-                filter(self._current_ct.optimization_id == self._current_oid,
-                       self._current_ct.generation == generation,
-                       self._current_ct.calculation_state == CALCULATION_FINISH).count()
+            current_population = self._session.query(self._ct_model).\
+                filter(and_(self._ct_model.optimization_id == self._current_oid,
+                            self._ct_model.generation == generation,
+                            self._ct_model.calculation_state == CALCULATION_FINISH)).count()
 
             if current_population == total_population:
                 break
@@ -313,33 +318,35 @@ class OptimizationManager:
 
         modflowdatamodel.add_objects(objects=individual_odata["objects"])
 
-        parameter_set_filepath = create_input_and_output_filepath(
-            folder=Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER,
-                        self.current_ot.optimization_id, INDIVIDUAL_ODATA_FOLDER),
-            task_id=modflowdatamodel.md5_hash,
-            file_name=[ODATA_FILENAME],
-            file_type=JSON_ENDING
-        )[0]
+        parameter_set_filepath = (Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER / self.current_ot.optimization_id /
+                                  INDIVIDUAL_ODATA_FOLDER / modflowdatamodel.md5_hash /
+                                  f"{ODATA_FILENAME}{JSON_ENDING}")
 
-        calculation_data_filepath = create_input_and_output_filepath(
-            folder=Path(OPTIMIZATION_DATA, CALCULATION_FOLDER),
-            task_id=modflowdatamodel.md5_hash,
-            file_name=[MDATA_FILENAME],
-            file_type=JSON_ENDING
-        )
+        calculation_data_filepath = (Path(OPTIMIZATION_DATA) / CALCULATION_FOLDER / modflowdatamodel.md5_hash /
+                                     f"{MDATA_FILENAME}{JSON_ENDING}")
+
+        try:
+            parameter_set_filepath.parent.mkdir(parents=True)
+        except FileExistsError:
+            pass
+
+        try:
+            calculation_data_filepath.parent.mkdir(parents=True)
+        except FileExistsError:
+            pass
 
         try:
             write_json(obj=individual_odata,
                        filepath=parameter_set_filepath)
 
-            existing_jobs_with_cid = self._session.query(self._current_ct)\
-                .filter(self._current_ct.calculation_id == modflowdatamodel.md5_hash).all()
+            existing_jobs_with_cid = self._session.query(self._ct_model)\
+                .filter(self._ct_model.calculation_id == modflowdatamodel.md5_hash).all()
 
             if not existing_jobs_with_cid:
                 write_json(obj=modflowdatamodel.data,
                            filepath=calculation_data_filepath)
 
-            new_calc_task = self._current_ct(
+            new_calc_task = self._ct_model(
                 author=self.current_ot.author,
                 project=self.current_ot.project,
                 optimization_id=self.current_ot.optimization_id,
@@ -348,13 +355,14 @@ class OptimizationManager:
                 calculation_type=self.current_ot.optimization_type,
                 calculation_state=CALCULATION_START,  # Set state to start
                 generation=generation,
-                calculation_data_filepath=calculation_data_filepath
+                calculation_data_filepath=str(calculation_data_filepath)
             )
 
             self._session.add(new_calc_task)
             self._session.commit()
 
-        except (IOError, DBAPIError):
+        except (IOError, DBAPIError) as e:
+            print(str(e))
             self._session.rollback()
 
     def create_new_calculation_jobs(self,
@@ -378,7 +386,7 @@ class OptimizationManager:
         :return:
         """
 
-        calculation_task = self._session.query(self._current_ct).last()
+        calculation_task = self._session.query(self._ct_model).last()
 
         try:
             generation = calculation_task.generation + 1
@@ -411,7 +419,7 @@ class OptimizationManager:
 
         Path(optimization_task.data_filepath).unlink()
 
-        individual_ct = get_table_for_optimization_id(self._ct_model, self._current_oid)
+        individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
 
         calculations = self._session.query(individual_ct).all()
 
@@ -436,8 +444,8 @@ class OptimizationManager:
                 old_optimization_tasks.append(task)
 
         for task in old_optimization_tasks:
-            individual_ct = get_table_for_optimization_id(self._ct_model, self._current_oid)
-            individual_oh = get_table_for_optimization_id(self._oh_model, self._current_oid)
+            individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
+            individual_oh = get_table_for_optimization_id(self._oh_model_template, self._current_oid)
 
             Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
 
@@ -493,7 +501,7 @@ class OptimizationManager:
 
             population = self._current_eat.select_best_individuals(population)
 
-            optimization_history = self._current_oh(
+            optimization_history = self._oh_model(
                 author=optimization_task.author,
                 project=optimization_task.project,
                 optimization_id=self._current_oid,
@@ -561,7 +569,9 @@ class OptimizationManager:
                 self._session.commit()
 
                 # Set temporary attributes
-                request_data = load_json(optimization_task.data_filepath)
+                request_data = load_json(
+                    Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER /
+                    optimization_task.optimization_id / "optimization.json")
 
                 self._current_rdata = {
                     request_data[key]
@@ -572,7 +582,7 @@ class OptimizationManager:
                 self._current_mdata = request_data["data"]
 
                 # Set temporary schema, solver
-                self._schema = self._refresolver = get_schema_and_refresolver(SCHEMA_MODFLOW_MODEL_DATA)
+                self._schema, self._refresolver = get_schema_and_refresolver(SCHEMA_MODFLOW_MODEL_DATA)
 
                 variable_map, variable_bounds, _ = self.read_optimization_data()
 
@@ -584,12 +594,12 @@ class OptimizationManager:
                     weights=self.optimization_weights,  # from self.optimization_data
                     parameters=self._current_odata["parameters"]
                 )
-                self._current_oh = get_table_for_optimization_id(self._oh_model, self._current_oid)
-                self._current_ct = get_table_for_optimization_id(self._ct_model, self._current_oid)
+                self._oh_model = get_table_for_optimization_id(self._oh_model_template, self._current_oid)
+                self._ct_model = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
 
                 Base.metadata.create_all(bind=engine,
-                                         tables=[self._current_ct.__table__,
-                                                 self._current_oh.__table__],
+                                         tables=[self._ct_model.__table__,
+                                                 self._oh_model.__table__],
                                          checkfirst=True)
 
                 solution = self.manage_any_optimization()
