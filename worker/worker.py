@@ -5,7 +5,7 @@ from sqlalchemy import and_
 from flopyAdapter import ModflowDataModel, FlopyModelManager
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "opt_app"))
-from db import Session  # noqa: E402
+from db import Session, engine  # noqa: E402
 from models import CalculationTask, OptimizationTask  # noqa: E402
 
 from helpers.functions import load_json, get_table_for_optimization_id  # noqa: E402
@@ -34,6 +34,15 @@ class WorkerManager:
         self._current_oid = None
         self._current_data_hash = None
         # self._current_ct = None
+
+    def await_calculation_table(self):
+        """ Function for waiting for calculation table to be created before working with it
+
+        :return:
+        """
+        while True:
+            if engine.has_table(table_name=self._ct_model.__tablename__):
+                break
 
     @property
     def first_starting_ct(self) -> Session.query:
@@ -73,6 +82,8 @@ class WorkerManager:
                 self._current_oid = self.current_ot.optimization_id
                 self._ct_model = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
 
+                self.await_calculation_table()
+
                 if self.first_starting_ct:
                     self._current_data_hash = self.first_starting_ct.data_hash
 
@@ -91,6 +102,9 @@ class WorkerManager:
 
                         # data was already validated by optimization manager
                         modflowdatamodel = ModflowDataModel(calculation_data)
+
+                        # overwrite model_ws with real folder
+                        modflowdatamodel.model_ws = calculation_data_filepath.parent
 
                         flopymodelmanager = FlopyModelManager.from_modflowdatamodel(modflowdatamodel)
 

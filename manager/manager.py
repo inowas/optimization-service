@@ -18,10 +18,10 @@ from helpers.functions import create_input_and_output_filepath, load_json, write
     get_table_for_optimization_id, get_schema_and_refresolver   # noqa: E402
 from db import Session, engine  # noqa: E402
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory  # noqa: E402
-from helpers.config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_ODATA_FOLDER, \
+from helpers.config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_PARAMETERS_FOLDER, \
     OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, OPTIMIZATION_FINISH, \
     MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, ODATA_FILENAME, MDATA_FILENAME, JSON_ENDING, \
-    SCHEMA_MODFLOW_MODEL_DATA  # noqa: E402
+    SCHEMA_MODFLOW_MODEL_DATA, NUMBER_OF_SOLUTIONS  # noqa: E402
 
 
 class OptimizationManager:
@@ -261,19 +261,16 @@ class OptimizationManager:
         summarized_fitness = []
 
         for calculation in finished_calculation_tasks:
-            individual_odata = create_input_and_output_filepath(
-                folder=Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER,
-                            self.current_ot.optimization_id, INDIVIDUAL_ODATA_FOLDER),
-                task_id=calculation.calculation_id,
-                file_name=[ODATA_FILENAME],
-                file_type=JSON_ENDING
-            )[0]
+            individual_odata = (Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER / self.current_ot.optimization_id /
+                                INDIVIDUAL_PARAMETERS_FOLDER / calculation.data_hash /
+                                f"{ODATA_FILENAME}{JSON_ENDING}")
 
             summarized_individual_odata.append(load_json(individual_odata))
 
             flopyfitnessadapter = FlopyFitnessAdapter.from_id(self._current_odata,
-                                                              calculation.calculation_id,
-                                                              OPTIMIZATION_DATA)
+                                                              calculation.data_hash,
+                                                              Path(OPTIMIZATION_DATA) / CALCULATION_FOLDER)
+
             summarized_fitness.append(flopyfitnessadapter.get_fitness())
 
         return summarized_individual_odata, summarized_fitness
@@ -319,7 +316,7 @@ class OptimizationManager:
         modflowdatamodel.add_objects(objects=individual_odata["objects"])
 
         parameter_set_filepath = (Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER / self.current_ot.optimization_id /
-                                  INDIVIDUAL_ODATA_FOLDER / modflowdatamodel.md5_hash /
+                                  INDIVIDUAL_PARAMETERS_FOLDER / modflowdatamodel.md5_hash /
                                   f"{ODATA_FILENAME}{JSON_ENDING}")
 
         calculation_data_filepath = (Path(OPTIMIZATION_DATA) / CALCULATION_FOLDER / modflowdatamodel.md5_hash /
@@ -354,8 +351,7 @@ class OptimizationManager:
                 data_hash=modflowdatamodel.md5_hash,
                 calculation_type=self.current_ot.optimization_type,
                 calculation_state=CALCULATION_START,  # Set state to start
-                generation=generation,
-                calculation_data_filepath=str(calculation_data_filepath)
+                generation=generation
             )
 
             self._session.add(new_calc_task)
@@ -493,10 +489,6 @@ class OptimizationManager:
             fitnesses = [self.linear_scalarization(single_fitness)
                          for single_fitness in summarized_fitness]
 
-            print(individuals)
-            print()
-            print(fitnesses)
-
             population = self._current_eat.evaluate_finished_calculations(individuals, fitnesses)
 
             population = self._current_eat.select_best_individuals(population)
@@ -513,8 +505,7 @@ class OptimizationManager:
             self._session.add(optimization_history)
             self._session.commit()
 
-        return self._current_eat.select_nth_of_hall_of_fame(
-            self._current_odata["parameters"]["number_of_solutions"])
+        return self._current_eat.select_nth_of_hall_of_fame(NUMBER_OF_SOLUTIONS)
 
     def manage_linear_optimization(self):
         """ Manager for linear optimizations. It only calls the linear optimization function of the ea toolbox and
@@ -538,7 +529,8 @@ class OptimizationManager:
         optimization_task = self._session.query(self._ot_model)\
             .filter(self._ot_model.optimization_id == self._current_oid).first()
 
-        assert optimization_task.optimization_type in ["GA", "LO"], "Error: optimization_type is neither 'GA' nor 'LO'"
+        assert optimization_task.optimization_type in ["GA", "LO"], \
+            "Error: optimization_type is neither 'GA' nor 'LO'"
 
         if optimization_task.optimization_type == "GA":
             return self.manage_evolutionary_optimization()
@@ -611,11 +603,11 @@ class OptimizationManager:
                 self._session.commit()
 
                 # Remove single job properties
-                self.remove_optimization_and_calculation_data()
+                # self.remove_optimization_and_calculation_data()
 
                 continue
 
-            self.remove_old_optimization_tasks_and_tables()
+            # self.remove_old_optimization_tasks_and_tables()
 
             # print("No jobs. Sleeping for 1 minute.")
             # sleep(60)

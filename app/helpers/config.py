@@ -19,10 +19,10 @@ OPTIMIZATION_FOLDER = "optimization"
 CALCULATION_FOLDER = "calculation"
 
 # folder for parameters
-INDIVIDUAL_ODATA_FOLDER = "individual_optimization_data"
+INDIVIDUAL_PARAMETERS_FOLDER = "individual_parameters"
 
 # Optimization data name
-ODATA_FILENAME = "optimization_data"
+ODATA_FILENAME = "optimization_parameters"
 
 # Model data name
 MDATA_FILENAME = "model_data"
@@ -64,3 +64,5 @@ OPTIMIZATION_TYPE_LINEAR = "LO"
 MAX_STORING_TIME_OPTIMIZATION_TASKS = 20  # in days
 
 MISSING_DATA_VALUE = -9999
+
+NUMBER_OF_SOLUTIONS = 10

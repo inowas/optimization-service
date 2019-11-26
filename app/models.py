@@ -24,10 +24,9 @@ class OptimizationTask(Base):
     total_generation = Column(Integer)
     solution = Column(ARRAY(Float))
     scalar_fitness = Column(Float)
-    data_filepath = Column(String)
 
     def __init__(self, author, project, optimization_id, optimization_type, optimization_state, total_population,
-                 total_generation, solution, data_filepath, **args):
+                 total_generation, solution, **args):
         super().__init__(**args)
 
         self.author = author
@@ -42,7 +41,6 @@ class OptimizationTask(Base):
         self.total_generation = total_generation
         self.solution = solution
         self.scalar_fitness = INITIAL_SCALAR_FITNESS
-        self.data_filepath = data_filepath
 
 
 class OptimizationHistory:
@@ -74,11 +72,10 @@ class CalculationTask:
     calculation_state = Column(String)
     generation = Column(Integer)
     individual_id = Column(Integer)
-    calculation_data_filepath = Column(String)
     fitness = Column(ARRAY(Float))
 
     def __init__(self, author, project, optimization_id, calculation_id, data_hash, calculation_type, calculation_state,
-                 generation, calculation_data_filepath, **args):
+                 generation, **args):
         super().__init__(**args)
 
         self.author = author
@@ -89,5 +86,4 @@ class CalculationTask:
         self.calculation_type = calculation_type
         self.calculation_state = calculation_state
         self.generation = generation
-        self.calculation_data_filepath = calculation_data_filepath
         self.fitness = []

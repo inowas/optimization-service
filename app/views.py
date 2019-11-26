@@ -60,13 +60,6 @@ def upload_file() -> jsonify:
         population_size = request_data["optimization"]["parameters"]["pop_size"]
         total_generation = request_data["optimization"]["parameters"]["ngen"]
 
-        # Create folder named after task_id in optimization_data folder
-        data_filepath = create_input_and_output_filepath(folder=Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER),
-                                                         task_id=optimization_id)[0]
-
-        data_filepath = (Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER / optimization_id /
-                         f"optimization{JSON_ENDING}")
-
         optimizationtask = OptimizationTask(
                                 author=author,
                                 project=project,
@@ -75,14 +68,16 @@ def upload_file() -> jsonify:
                                 optimization_state=optimization_state,  # Input: "optimization_start"
                                 total_population=population_size,
                                 total_generation=total_generation,
-                                solution=dict(),
-                                data_filepath=str(data_filepath)
+                                solution=dict()
                             )
 
         try:
             Path(OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, optimization_id).mkdir(parents=True)
         except FileExistsError:
             pass
+
+        data_filepath = (Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER / optimization_id /
+                         f"optimization{JSON_ENDING}")
 
         try:
             write_json(obj=request_data,
