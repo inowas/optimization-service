@@ -44,6 +44,8 @@ OPTIMIZATION_RUN = "optimization_run"
 OPTIMIZATION_FINISH = "optimization_finish"
 # State when error appeared
 OPTIMIZATION_ABORT = "optimization_abort"
+# State when optimization should stop
+OPTIMIZATION_STOP = "optimization_stop"
 
 # Strings for calculation states
 # State when task is added to calculation table
@@ -56,7 +58,7 @@ CALCULATION_FINISH = "calculation_finish"
 CALCULATION_ABORT = "calculation_abort"
 
 # Initial fitness (should be really bad)
-INITIAL_SCALAR_FITNESS = 999.0
+INITIAL_SCALAR_FITNESS = 999_999.0
 
 OPTIMIZATION_TYPE_EVOLUTION = "GA"
 OPTIMIZATION_TYPE_LINEAR = "LO"

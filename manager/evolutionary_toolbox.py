@@ -133,6 +133,12 @@ class EAToolbox:
 
     def make_population(self,
                         population_size: int) -> List[List[float]]:
+        """ Function caller to create a population based on the toolbox population function and the given population
+        size as integer
+
+        :param population_size:
+        :return:
+        """
         return self.toolbox.population(population_size)
 
     def evaluate_finished_calculations(self,
@@ -273,8 +279,6 @@ class EAToolbox:
             )
         else:
             population = self.select_best_individuals(pop)
-
-        # self.toolbox.select(pop, mu)
 
         self._diversity_ref_point = qbound * Q_diversity
 

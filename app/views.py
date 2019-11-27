@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 from jsonschema import ValidationError, SchemaError, Draft7Validator
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
 from flask import Blueprint
@@ -13,10 +14,10 @@ from flask_cors import cross_origin
 from db import Session
 from models import OptimizationTask, OptimizationHistory
 
-from helpers.functions import get_table_for_optimization_id, create_input_and_output_filepath, \
+from helpers.functions import get_table_for_optimization_id, \
     write_json, get_schema_and_refresolver
 from helpers.config import SCHEMA_INOWAS_OPTIMIZATION, OPTIMIZATION_RUN, \
-    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, JSON_ENDING
+    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, JSON_ENDING, OPTIMIZATION_ABORT, OPTIMIZATION_STOP
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -55,6 +56,9 @@ def upload_file() -> jsonify:
         project = request_data.get("project", "unknown")
         optimization_id = request_data["optimization_id"]
         optimization_state = request_data.get("type", "optimization_start")  # expect optimization_stop, otherwise start
+
+        if optimization_state == OPTIMIZATION_STOP:
+            return redirect(f"/optimization/abort/{optimization_id}")
 
         method = request_data["optimization"]["parameters"]["method"]
         population_size = request_data["optimization"]["parameters"]["pop_size"]
@@ -115,7 +119,7 @@ def show_all_optimizations():
 
         optimization_tasks_df = pd.read_sql(optimization_tasks, Session.bind)
 
-        optimization_tasks_df = optimization_tasks_df.drop(["data_filepath"], axis=1)
+        # optimization_tasks_df = optimization_tasks_df.drop(["data_filepath"], axis=1)
 
         return optimization_tasks_df.to_html()
 
@@ -153,27 +157,44 @@ def show_single_optimization_progress(optimization_id_):
 
                     fig = plt.figure()
                     ax = fig.add_subplot(111)
-                    ax.ylim((0, optimization_progress_df['scalar_fitness'].iloc[0]))
+                    ax.set_ylim((0, 1.5 * optimization_progress_df['scalar_fitness'].iloc[0]))
 
                     optimization_progress_df.plot(x="generation",
                                                   y="scalar_fitness",
-                                                  logy=True,
+                                                  # logy=True,
                                                   legend=False,
+                                                  color="blue",
                                                   ax=ax)
 
                     ax.set_title(f"Optimization ID: {optimization_id_}\n"
                                  f"Generation: {(optimization_task.current_generation-1)}/"
                                  f"{optimization_task.total_generation}")
 
-                    ax.text(x=0.7,
-                            y=0.9,
-                            transform=ax.transAxes,
-                            s=f"Current best fitness: {optimization_progress_df['scalar_fitness'].iloc[-1]}")
+                    ax.text(x=0.6 * optimization_task.total_generation,
+                            y=0.9 * 1.5 * optimization_progress_df['scalar_fitness'].iloc[0],
+                            # transform=ax.transAxes,
+                            s=f"Current best fitness: "
+                              f"{np.round(optimization_progress_df['scalar_fitness'].dropna().iloc[-1], 2)}")
 
                     fig.savefig(output, format='png')
 
                     return Response(output.getvalue(), mimetype='image/png')
 
+                return abort(404, f"Optimization with id {optimization_id_} has no progress table.")
+
             return abort(404, f"Optimization with id {optimization_id_} isn't running. Progress graph not available!")
 
         return abort(404, f"Optimization with id {optimization_id_} does not exist.")
+
+
+@optimization_blueprint.route("/optimization/<optimization_id_>/abort/", methods=['POST'])
+@cross_origin()
+def abort_optimization(optimization_id_):
+    optimization_task = Session.query(OptimizationTask). \
+        filter(OptimizationTask.optimization_id == optimization_id_).first()
+
+    optimization_task.optimization_state = OPTIMIZATION_ABORT
+
+    Session.commit()
+
+    return redirect(f"/optimization")

@@ -6,8 +6,8 @@
   "optimization": {
     "parameters": {
       "method": "GA",
-      "ngen": 5,
-      "pop_size": 10,
+      "ngen": 500,
+      "pop_size": 100,
       "mutpb": 0.1,
       "cxpb": 0.9,
       "eta": 20,

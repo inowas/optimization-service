@@ -1,7 +1,7 @@
 import os.path
 from pathlib import Path
 from time import sleep
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from flopyAdapter import ModflowDataModel, FlopyModelManager
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "opt_app"))
@@ -11,7 +11,7 @@ from models import CalculationTask, OptimizationTask  # noqa: E402
 from helpers.functions import load_json, get_table_for_optimization_id  # noqa: E402
 from helpers.config import OPTIMIZATION_RUN, CALCULATION_START, CALCULATION_RUN, CALCULATION_FINISH, \
     OPTIMIZATION_TYPE_EVOLUTION, MISSING_DATA_VALUE, MDATA_FILENAME, OPTIMIZATION_DATA, CALCULATION_FOLDER, \
-    JSON_ENDING  # noqa: E402
+    JSON_ENDING, OPTIMIZATION_ABORT  # noqa: E402
 
 
 class WorkerManager:
@@ -65,7 +65,8 @@ class WorkerManager:
     def current_ot(self) -> Session.query:
 
         return self._session.query(self._ot_model).\
-            filter(self._ot_model.optimization_state == OPTIMIZATION_RUN).first()
+            filter(or_(self._ot_model.optimization_state == OPTIMIZATION_RUN,
+                       self._ot_model.optimization_state == OPTIMIZATION_ABORT)).first()
 
     @property
     def any_finished_ct_with_same_id(self):
@@ -78,8 +79,13 @@ class WorkerManager:
         while True:
 
             if self.current_ot:
+                # Could happen that state is switched to finish inbetween and thus no more optimization is activated
+                # Workaround
+                try:
+                    self._current_oid = self.current_ot.optimization_id
+                except AttributeError:
+                    continue
 
-                self._current_oid = self.current_ot.optimization_id
                 self._ct_model = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
 
                 self.await_calculation_table()

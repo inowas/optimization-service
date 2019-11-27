@@ -1,5 +1,5 @@
 import os.path
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Union
 from copy import deepcopy
 from pathlib import Path
 from time import sleep
@@ -410,45 +410,7 @@ class OptimizationManager:
 
         return scalar_solution
 
-    def remove_optimization_and_calculation_data(self) -> None:
-        optimization_task = self.current_ot
-
-        Path(optimization_task.data_filepath).unlink()
-
-        individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
-
-        calculations = self._session.query(individual_ct).all()
-
-        calculation_files = [(calculation.calcinput_filepath,  calculation.calcoutput_filepath)
-                             for calculation in calculations]
-
-        for calcinput_file, calcoutput_file in calculation_files:
-            Path(calcinput_file).unlink()
-            Path(calcoutput_file).unlink()
-
-    def remove_old_optimization_tasks_and_tables(self):
-        now_date = datetime.now().date()
-
-        optimization_tasks = self._session.query(self._ot_model)\
-            .filter(or_(self._ot_model.optimization_state == OPTIMIZATION_FINISH,
-                        self._ot_model.optimization_state == OPTIMIZATION_ABORT)).all()
-
-        old_optimization_tasks = []
-        for task in optimization_tasks:
-            existing_time = (now_date - pd.to_datetime(task.publishing_date).date()).days
-            if existing_time > MAX_STORING_TIME_OPTIMIZATION_TASKS:
-                old_optimization_tasks.append(task)
-
-        for task in old_optimization_tasks:
-            individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
-            individual_oh = get_table_for_optimization_id(self._oh_model_template, self._current_oid)
-
-            Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
-
-            self._session.remove(task)
-            self._session.commit()
-
-    def manage_evolutionary_optimization(self):
+    def manage_evolutionary_optimization(self) -> List[List[float]]:
         number_of_generations = self._current_odata["parameters"]["ngen"]
         population_size = self._current_odata["parameters"]["pop_size"]
 
@@ -457,6 +419,10 @@ class OptimizationManager:
         for generation in range(number_of_generations):
 
             optimization_task = self.current_ot
+
+            if (optimization_task.optimization_state == OPTIMIZATION_ABORT and
+                    optimization_task.current_generation > 1):
+                break
 
             optimization_task.current_generation = generation + 1  # Table counts to ten
             optimization_task.current_population = 0
@@ -505,9 +471,9 @@ class OptimizationManager:
             self._session.add(optimization_history)
             self._session.commit()
 
-        return self._current_eat.select_nth_of_hall_of_fame(NUMBER_OF_SOLUTIONS)
+        return self._current_eat.select_nth_of_hall_of_fame(self._current_odata["parameters"]["pop_size"])
 
-    def manage_linear_optimization(self):
+    def manage_linear_optimization(self) -> List[float]:
         """ Manager for linear optimizations. It only calls the linear optimization function of the ea toolbox and
         passes it the solution as given by the optimization data along with the linear optimization queue function
         which manages to distribute a calculation tasks and also summarizes the solution. This has to happen all in one,
@@ -519,7 +485,7 @@ class OptimizationManager:
         return self._current_eat.optimize_linear(solution=self._current_odata["result"],
                                                  function=self.linear_optimization_queue)
 
-    def manage_any_optimization(self):
+    def manage_any_optimization(self) -> Union[List[float], List[List[float]]]:
         """ Manager for any kind of optimization that handles both offered types (genetic and linear). Primarily this
         method was introduced to separate the two methods and have only one function call that divides depending on
         the current optimization task.
@@ -537,6 +503,44 @@ class OptimizationManager:
 
         if optimization_task.optimization_type == "LO":
             return self.manage_linear_optimization()
+
+    def remove_optimization_and_calculation_data(self) -> None:
+        optimization_task = self.current_ot
+
+        Path(optimization_task.data_filepath).unlink()
+
+        individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
+
+        calculations = self._session.query(individual_ct).all()
+
+        calculation_files = [(calculation.calcinput_filepath,  calculation.calcoutput_filepath)
+                             for calculation in calculations]
+
+        for calcinput_file, calcoutput_file in calculation_files:
+            Path(calcinput_file).unlink()
+            Path(calcoutput_file).unlink()
+
+    def remove_old_optimization_tasks_and_tables(self) -> None:
+        now_date = datetime.now().date()
+
+        optimization_tasks = self._session.query(self._ot_model)\
+            .filter(or_(self._ot_model.optimization_state == OPTIMIZATION_FINISH,
+                        self._ot_model.optimization_state == OPTIMIZATION_ABORT)).all()
+
+        old_optimization_tasks = []
+        for task in optimization_tasks:
+            existing_time = (now_date - pd.to_datetime(task.publishing_date).date()).days
+            if existing_time > MAX_STORING_TIME_OPTIMIZATION_TASKS:
+                old_optimization_tasks.append(task)
+
+        for task in old_optimization_tasks:
+            individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
+            individual_oh = get_table_for_optimization_id(self._oh_model_template, self._current_oid)
+
+            Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
+
+            self._session.remove(task)
+            self._session.commit()
 
     def run(self):
         """ Function run is used to keep the manager working constantly. It will work on one optimization only and
