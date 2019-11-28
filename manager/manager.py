@@ -411,6 +411,19 @@ class OptimizationManager:
         return scalar_solution
 
     def manage_evolutionary_optimization(self) -> List[List[float]]:
+        """ Function for evolutionary optimization
+        The function first grabs the parameters number of generations and population size and then starts
+        walking through the generations and each time
+        - getting last generation fitnesses with parameters and developing a new population based on the fitness
+        of each(except for first generation)
+        - creating new calculation jobs for those new individuals
+        - waiting for finished calculations of generation
+        - again getting parameters and fitnesses, this time of current generation for creating a new population
+        based on the fitness
+        - selecting the best of the evaluated population
+
+        :return:
+        """
         number_of_generations = self._current_odata["parameters"]["ngen"]
         population_size = self._current_odata["parameters"]["pop_size"]
 
@@ -428,6 +441,7 @@ class OptimizationManager:
             optimization_task.current_population = 0
             self._session.commit()
 
+            # todo modify the following code to reduce code repetition
             if generation > 0:
                 summarized_individual_odata, summarized_fitness = self.summarize_finished_calculation_tasks(
                     generation=(generation - 1)
@@ -447,7 +461,8 @@ class OptimizationManager:
 
             self.await_generation_finished(generation)
 
-            summarized_individual_odata, summarized_fitness = self.summarize_finished_calculation_tasks(generation)
+            summarized_individual_odata, summarized_fitness = self.summarize_finished_calculation_tasks(
+                generation)
 
             individuals = [self.read_optimization_data(optimization_data)[2]
                            for optimization_data in summarized_individual_odata]
