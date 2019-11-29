@@ -116,6 +116,8 @@ class WorkerManager:
 
                         flopymodelmanager.build_flopymodel()
 
+                        print(flopymodelmanager.flopy_packages)
+
                         flopymodelmanager.run_model()
 
                     for job in existing_jobs_with_cid:

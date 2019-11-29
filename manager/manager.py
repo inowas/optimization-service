@@ -429,7 +429,7 @@ class OptimizationManager:
 
         population = self._current_eat.make_population(population_size)
 
-        for generation in range(number_of_generations):
+        for generation in range((number_of_generations+1)):
 
             optimization_task = self.current_ot
 

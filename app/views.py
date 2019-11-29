@@ -17,7 +17,7 @@ from models import OptimizationTask, OptimizationHistory
 from helpers.functions import get_table_for_optimization_id, \
     write_json, get_schema_and_refresolver
 from helpers.config import SCHEMA_INOWAS_OPTIMIZATION, OPTIMIZATION_RUN, \
-    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, JSON_ENDING, OPTIMIZATION_ABORT, OPTIMIZATION_STOP
+    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, JSON_ENDING, OPTIMIZATION_ABORT, OPTIMIZATION_STOP, OPTIMIZATION_FINISH
 
 optimization_blueprint = Blueprint("optimization", __name__)
 
@@ -134,7 +134,7 @@ def show_single_optimization_progress(optimization_id_):
             filter(OptimizationTask.optimization_id == optimization_id_).first()
 
         if optimization_task:
-            if optimization_task.optimization_state == OPTIMIZATION_RUN:
+            if optimization_task.optimization_state in [OPTIMIZATION_RUN, OPTIMIZATION_FINISH]:
                 optimization_id = optimization_task.optimization_id
 
                 individual_oh = get_table_for_optimization_id(OptimizationHistory, optimization_id)
