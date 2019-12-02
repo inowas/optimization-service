@@ -188,7 +188,7 @@ class EAToolbox:
 
     def select_nth_of_hall_of_fame(self,
                                    nth: int):
-        """ Function wrapper to return the first of equally optimal solutions of the paretofront-halloffame
+        """ Function wrapper to return n of equally optimal solutions of the paretofront-halloffame
 
         Returns:
             hall_of_fame: first individual (hall of fame solutions can be seen equally for a paretofront type of hall
@@ -197,6 +197,18 @@ class EAToolbox:
         """
 
         return self.hall_of_fame[:nth]
+
+    def get_solutions_and_fitnesses(self,
+                                    nth: int):
+        """ Function to return the solutions as stated in the hall of fame and their fitness values per each
+
+        :param nth:
+        :return:
+        """
+        solutions = self.select_nth_of_hall_of_fame(nth)
+        fitnesses = [s.fitness.values for s in solutions]
+
+        return solutions, fitnesses
 
     # Author: Aybulat Fatkhutdinov
     @staticmethod
@@ -365,4 +377,4 @@ class EAToolbox:
 
         solver.Solve(function)
 
-        return list(solver.Solution())
+        return list(solver.Solution()), solver.fit

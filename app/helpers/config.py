@@ -67,4 +67,7 @@ MAX_STORING_TIME_OPTIMIZATION_TASKS = 20  # in days
 
 MISSING_DATA_VALUE = -9999
 
-NUMBER_OF_SOLUTIONS = 10
+NUMBER_OF_SOLUTIONS = 10  # could be used for fixed number of solutions
+
+STATUS_REGULAR_CALCULATION = 0  # code for regular calculation
+STATUS_ERROR_CALCULATION = 400  # code for flopy.run_model returning False

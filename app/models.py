@@ -2,7 +2,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, Integer, Float, ARRAY
 from datetime import datetime
 
-from helpers.config import INITIAL_SCALAR_FITNESS
+from helpers.config import INITIAL_SCALAR_FITNESS, STATUS_REGULAR_CALCULATION
 
 
 # Basically our empty database with its models gets the information to which existing database to connect
@@ -43,6 +43,34 @@ class OptimizationTask(Base):
         self.scalar_fitness = INITIAL_SCALAR_FITNESS
 
 
+class CalculationTask(Base):
+    __tablename__ = "calculation_tasks"
+
+    # Column definitions
+    optimization_id = Column(String)
+    calculation_id = Column(String, primary_key=True, unique=True)
+    data_hash = Column(String)
+    calculation_type = Column(String)
+    calculation_state = Column(String)
+    generation = Column(Integer)
+    individual_id = Column(Integer)
+    status = Column(Integer)
+    fitness = Column(ARRAY(Float))
+
+    def __init__(self, optimization_id, calculation_id, data_hash, calculation_type, calculation_state,
+                 generation, **args):
+        super().__init__(**args)
+
+        self.optimization_id = optimization_id
+        self.calculation_id = calculation_id
+        self.data_hash = data_hash
+        self.calculation_type = calculation_type
+        self.calculation_state = calculation_state
+        self.generation = generation
+        self.status = STATUS_REGULAR_CALCULATION  # expected to run well, overwrite for cases where not
+        self.fitness = []
+
+
 class OptimizationHistory:
     # Column definitions
     author = Column(String)
@@ -59,31 +87,3 @@ class OptimizationHistory:
         self.optimization_id = optimization_id
         self.generation = generation
         self.scalar_fitness = scalar_fitness
-
-
-class CalculationTask:
-    # Column definitions
-    author = Column(String)
-    project = Column(String)
-    optimization_id = Column(String)
-    calculation_id = Column(String, primary_key=True, unique=True)
-    data_hash = Column(String)
-    calculation_type = Column(String)
-    calculation_state = Column(String)
-    generation = Column(Integer)
-    individual_id = Column(Integer)
-    fitness = Column(ARRAY(Float))
-
-    def __init__(self, author, project, optimization_id, calculation_id, data_hash, calculation_type, calculation_state,
-                 generation, **args):
-        super().__init__(**args)
-
-        self.author = author
-        self.project = project
-        self.optimization_id = optimization_id
-        self.calculation_id = calculation_id
-        self.data_hash = data_hash
-        self.calculation_type = calculation_type
-        self.calculation_state = calculation_state
-        self.generation = generation
-        self.fitness = []

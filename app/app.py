@@ -3,7 +3,7 @@ from flask import Flask
 from flask_cors import CORS
 
 from views import optimization_blueprint
-from models import Base, OptimizationTask
+from models import Base, OptimizationTask, CalculationTask
 from db import engine
 from time import sleep
 
@@ -35,7 +35,8 @@ app.register_blueprint(optimization_blueprint)
 
 CORS(app)
 
-tables = [OptimizationTask.__table__]
+tables = [OptimizationTask.__table__,
+          CalculationTask.__table__]
 
 Base.metadata.create_all(bind=engine,
                          tables=tables,

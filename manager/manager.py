@@ -1,12 +1,10 @@
 import os.path
-from typing import Tuple, List, Optional, Union
-from copy import deepcopy
 from pathlib import Path
-from time import sleep
-from datetime import datetime
-import pandas as pd
+from copy import deepcopy
 from uuid import uuid4
-from sqlalchemy import or_, and_
+from time import sleep
+from typing import Tuple, List, Optional, Union
+from sqlalchemy import and_
 from sqlalchemy.exc import DBAPIError
 from flopyAdapter import ModflowDataModel, FlopyFitnessAdapter
 
@@ -21,16 +19,16 @@ from models import Base, OptimizationTask, CalculationTask, OptimizationHistory 
 from helpers.config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_PARAMETERS_FOLDER, \
     OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, OPTIMIZATION_FINISH, \
     MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, ODATA_FILENAME, MDATA_FILENAME, JSON_ENDING, \
-    SCHEMA_MODFLOW_MODEL_DATA, NUMBER_OF_SOLUTIONS  # noqa: E402
+    SCHEMA_MODFLOW_MODEL_DATA, STATUS_REGULAR_CALCULATION  # noqa: E402
 
 
 class OptimizationManager:
     def __init__(self,
-                 session,
-                 ea_toolbox,
+                 session: Session,
+                 ea_toolbox: EAToolbox,
                  optimization_task,
-                 optimization_history,
-                 calculation_task):
+                 calculation_task,
+                 optimization_history):
         # Db session and evolutionary algorithm toolbox
         self._session = session
         self._ea_toolbox = ea_toolbox
@@ -39,8 +37,8 @@ class OptimizationManager:
         self._ot_model = optimization_task
         self._oh_model_template = optimization_history
         self._oh_model = None
-        self._ct_model_template = calculation_task
-        self._ct_model = None
+        # self._ct_model_template = calculation_task
+        self._ct_model = calculation_task
         # self._ct_model = calculation_task
 
         # Json schema for calculation data
@@ -261,17 +259,19 @@ class OptimizationManager:
         summarized_fitness = []
 
         for calculation in finished_calculation_tasks:
-            individual_odata = (Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER / self.current_ot.optimization_id /
-                                INDIVIDUAL_PARAMETERS_FOLDER / calculation.data_hash /
-                                f"{ODATA_FILENAME}{JSON_ENDING}")
+            # Only append if calculation was successful!
+            if calculation.status == STATUS_REGULAR_CALCULATION:
+                individual_odata = (Path(OPTIMIZATION_DATA) / OPTIMIZATION_FOLDER / self.current_ot.optimization_id /
+                                    INDIVIDUAL_PARAMETERS_FOLDER / calculation.data_hash /
+                                    f"{ODATA_FILENAME}{JSON_ENDING}")
 
-            summarized_individual_odata.append(load_json(individual_odata))
+                summarized_individual_odata.append(load_json(individual_odata))
 
-            flopyfitnessadapter = FlopyFitnessAdapter.from_id(self._current_odata,
-                                                              calculation.data_hash,
-                                                              Path(OPTIMIZATION_DATA) / CALCULATION_FOLDER)
+                flopyfitnessadapter = FlopyFitnessAdapter.from_id(self._current_odata,
+                                                                  calculation.data_hash,
+                                                                  Path(OPTIMIZATION_DATA) / CALCULATION_FOLDER)
 
-            summarized_fitness.append(flopyfitnessadapter.get_fitness())
+                summarized_fitness.append(flopyfitnessadapter.get_fitness())
 
         return summarized_individual_odata, summarized_fitness
 
@@ -344,8 +344,6 @@ class OptimizationManager:
                            filepath=calculation_data_filepath)
 
             new_calc_task = self._ct_model(
-                author=self.current_ot.author,
-                project=self.current_ot.project,
                 optimization_id=self.current_ot.optimization_id,
                 calculation_id=self.create_unique_id(),
                 data_hash=modflowdatamodel.md5_hash,
@@ -486,7 +484,8 @@ class OptimizationManager:
             self._session.add(optimization_history)
             self._session.commit()
 
-        return self._current_eat.select_nth_of_hall_of_fame(self._current_odata["parameters"]["pop_size"])
+        return self._current_eat.get_solutions_and_fitnesses(
+            self._current_odata["parameters"]["pop_size"])
 
     def manage_linear_optimization(self) -> List[float]:
         """ Manager for linear optimizations. It only calls the linear optimization function of the ea toolbox and
@@ -519,43 +518,43 @@ class OptimizationManager:
         if optimization_task.optimization_type == "LO":
             return self.manage_linear_optimization()
 
-    def remove_optimization_and_calculation_data(self) -> None:
-        optimization_task = self.current_ot
+    # def remove_optimization_and_calculation_data(self) -> None:
+    #     optimization_task = self.current_ot
+    #
+    #     Path(optimization_task.data_filepath).unlink()
+    #
+    #     individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
+    #
+    #     calculations = self._session.query(individual_ct).all()
+    #
+    #     calculation_files = [(calculation.calcinput_filepath,  calculation.calcoutput_filepath)
+    #                          for calculation in calculations]
+    #
+    #     for calcinput_file, calcoutput_file in calculation_files:
+    #         Path(calcinput_file).unlink()
+    #         Path(calcoutput_file).unlink()
 
-        Path(optimization_task.data_filepath).unlink()
-
-        individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
-
-        calculations = self._session.query(individual_ct).all()
-
-        calculation_files = [(calculation.calcinput_filepath,  calculation.calcoutput_filepath)
-                             for calculation in calculations]
-
-        for calcinput_file, calcoutput_file in calculation_files:
-            Path(calcinput_file).unlink()
-            Path(calcoutput_file).unlink()
-
-    def remove_old_optimization_tasks_and_tables(self) -> None:
-        now_date = datetime.now().date()
-
-        optimization_tasks = self._session.query(self._ot_model)\
-            .filter(or_(self._ot_model.optimization_state == OPTIMIZATION_FINISH,
-                        self._ot_model.optimization_state == OPTIMIZATION_ABORT)).all()
-
-        old_optimization_tasks = []
-        for task in optimization_tasks:
-            existing_time = (now_date - pd.to_datetime(task.publishing_date).date()).days
-            if existing_time > MAX_STORING_TIME_OPTIMIZATION_TASKS:
-                old_optimization_tasks.append(task)
-
-        for task in old_optimization_tasks:
-            individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
-            individual_oh = get_table_for_optimization_id(self._oh_model_template, self._current_oid)
-
-            Base.metadata.drop_all(tables=[individual_ct, individual_oh], bind=engine)
-
-            self._session.remove(task)
-            self._session.commit()
+    # def remove_old_optimization_tasks_and_tables(self) -> None:
+    #     now_date = datetime.now().date()
+    #
+    #     optimization_tasks = self._session.query(self._ot_model)\
+    #         .filter(or_(self._ot_model.optimization_state == OPTIMIZATION_FINISH,
+    #                     self._ot_model.optimization_state == OPTIMIZATION_ABORT)).all()
+    #
+    #     old_optimization_tasks = []
+    #     for task in optimization_tasks:
+    #         existing_time = (now_date - pd.to_datetime(task.publishing_date).date()).days
+    #         if existing_time > MAX_STORING_TIME_OPTIMIZATION_TASKS:
+    #             old_optimization_tasks.append(task)
+    #
+    #     for task in old_optimization_tasks:
+    #         # individual_ct = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
+    #         individual_oh = get_table_for_optimization_id(self._oh_model_template, self._current_oid)
+    #
+    #         Base.metadata.drop_all(tables=[individual_oh], bind=engine)
+    #
+    #         self._session.remove(task)
+    #         self._session.commit()
 
     def run(self):
         """ Function run is used to keep the manager working constantly. It will work on one optimization only and
@@ -606,11 +605,10 @@ class OptimizationManager:
                     parameters=self._current_odata["parameters"]
                 )
                 self._oh_model = get_table_for_optimization_id(self._oh_model_template, self._current_oid)
-                self._ct_model = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
+                # self._ct_model = get_table_for_optimization_id(self._ct_model_template, self._current_oid)
 
                 Base.metadata.create_all(bind=engine,
-                                         tables=[self._ct_model.__table__,
-                                                 self._oh_model.__table__],
+                                         tables=[self._oh_model.__table__],
                                          checkfirst=True)
 
                 solution = self.manage_any_optimization()

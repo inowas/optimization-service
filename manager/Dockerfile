@@ -13,4 +13,4 @@ WORKDIR /app
 RUN pip install -r ./requirements.txt
 
 # Install flopydatamodel and adapters
-RUN pip install git+https://github.com/inowas/flopyAdapter@master
+RUN pip install git+https://github.com/inowas/flopyAdapter@feature/1770-creation-of-a-library-from-inowasflopyadapter

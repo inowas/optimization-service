@@ -187,7 +187,7 @@ def show_single_optimization_progress(optimization_id_):
         return abort(404, f"Optimization with id {optimization_id_} does not exist.")
 
 
-@optimization_blueprint.route("/optimization/<optimization_id_>/abort/", methods=['POST'])
+@optimization_blueprint.route("/optimization/<optimization_id_>/abort/", methods=['POST', 'GET'])
 @cross_origin()
 def abort_optimization(optimization_id_):
     optimization_task = Session.query(OptimizationTask). \
