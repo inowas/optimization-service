@@ -188,11 +188,13 @@ class EAToolbox:
 
     def select_nth_of_hall_of_fame(self,
                                    nth: int):
-        """ Function wrapper to return n of equally optimal solutions of the paretofront-halloffame
+        """ Function wrapper to return n of equally optimal solutions of the pareto-front-hall-of-fame
+
+        Args:
+            nth (int) - the index up to which individuals will be returned
 
         Returns:
-            hall_of_fame: first individual (hall of fame solutions can be seen equally for a paretofront type of hall
-            of fame
+            selection of hall of fame - selection of the hall of fame up to the nth index
 
         """
 
@@ -202,8 +204,13 @@ class EAToolbox:
                                     nth: int):
         """ Function to return the solutions as stated in the hall of fame and their fitness values per each
 
-        :param nth:
-        :return:
+        Args:
+            nth (int) - the index up to which individuals will be returned
+
+        Returns:
+            solutions (list) - the solutions of those individuals which are selected from the hall of fame
+            fitnesses (list) - the fitnesses of those individuals which are selected from the hall of fame
+
         """
         solutions = self.select_nth_of_hall_of_fame(nth)
         fitnesses = [s.fitness.values for s in solutions]
@@ -214,8 +221,20 @@ class EAToolbox:
     @staticmethod
     def project_and_cluster(ncls: int,
                             pop: list,
-                            weights: Tuple[int, ...]):
-        """Implementation of the Project And Cluster algorithm proposed by Syndhya et al."""
+                            weights: Tuple[int, ...]) -> Tuple[float, list]:
+        """Implementation of the Project And Cluster algorithm proposed by
+        Syndhya et al. A Hybrid Framework for Evolutionary Multi-objective Optimization
+
+        Args:
+            ncls (int) - the number of clusters to build
+            pop (list) - the list of individuals each carrying their own parameters
+            weights (tuple) - the weights as given by the optimization data
+
+        Returns:
+            q-diversity (float) - the diversity calculated by the algorithm
+            cluster labels - the labels of the different clusters as found by the algorithm
+
+        """
         fitnesses = np.array([ind.fitness.values for ind in pop])
         fitnesses_reprojected = np.zeros(fitnesses.shape)
         maxs = np.max(fitnesses, 0)
@@ -237,23 +256,34 @@ class EAToolbox:
         centroids = kmeans.cluster_centers_
 
         # Calculating cluster diversity index
-        Q_diversity = 0
+        q_diversity = 0
         for cluster_label, centroid in zip(np.unique(cluster_labels), centroids):
             cluster_inds = [i for i, j in zip(pop, cluster_labels) if j == cluster_label]
             sum_of_distances = 0
             for ind in cluster_inds:
                 sum_of_distances += np.linalg.norm(centroid - ind.fitness.values)
-            Q_diversity += sum_of_distances / len(cluster_inds)
+            q_diversity += sum_of_distances / len(cluster_inds)
 
-        return Q_diversity, cluster_labels
+        return q_diversity, cluster_labels
 
     # Author: Aybulat Fatkhutdinov
     @staticmethod
     def diversity_enhanced_selection(pop: list,
                                      cluster_labels: List[int],
-                                     mu: float,
+                                     mu: int,
                                      selection_method) -> list:
-        # Returns population with enhanced deversity
+        """ Function for getting an enhanced selection of individuals
+
+        Args:
+            pop (list) - a list of individuals with parameters
+            cluster_labels (list) - a list of the cluster labels (1,2,...) as calculated by the algorithm
+            mu (int) - the size of wanted individuals
+            selection_method (callable) - the function used for the selection of individuals of every cluster
+
+        Returns:
+             diverse_pop - a diverse population as selected by the function
+
+        """
         diverse_pop = []
         cluster_pop_sorted = {}
 
@@ -279,12 +309,21 @@ class EAToolbox:
                         pop: list,
                         ncls: int,
                         qbound: float,
-                        mu: float) -> list:
-        Q_diversity, cluster_labels = self.project_and_cluster(
+                        mu: int) -> list:
+        """ Function to check diversity of the given population
+
+        Args:
+            pop (list) - a list of individuals with parameters
+            ncls (int) - the number of clusters
+            qbound (float) - a lower bound of the cluster quality index q
+            mu (int) - the size of wanted individuals
+
+        """
+        q_diversity, cluster_labels = self.project_and_cluster(
             ncls=ncls, pop=pop, weights=self.weights
         )
 
-        if self._diversity_ref_point is not None and Q_diversity < self._diversity_ref_point:
+        if self._diversity_ref_point is not None and q_diversity < self._diversity_ref_point:
             population = self.diversity_enhanced_selection(
                 pop=pop, cluster_labels=cluster_labels,
                 mu=mu, selection_method=self.toolbox.select
@@ -292,7 +331,7 @@ class EAToolbox:
         else:
             population = self.select_best_individuals(pop)
 
-        self._diversity_ref_point = qbound * Q_diversity
+        self._diversity_ref_point = qbound * q_diversity
 
         return population
 
@@ -302,6 +341,19 @@ class EAToolbox:
                            cxpb: float,
                            mutpb: float,
                            lambda_: int) -> list:
+        """ Function to create new population from previous ones and newly created individuals
+
+        Args:
+            pop (list) - a list of individuals with parameters
+            cxpb (float) - the crossing probability [0, 1] that has to be undershot by a random number to cause mutation
+            mutpb (float) - the mutation probability [0, 1] that has to be undershot by a random number to cause mutation
+            lambda_ (int) - the size of the offspring
+
+        Returns:
+            offspring - a combination of randomly combined crossed, mutated or simply randomly selected individuals of
+            the population
+
+        """
         # Vary population. Taken from def varOr()
         offspring = []
         for _ in range(lambda_):
@@ -327,16 +379,14 @@ class EAToolbox:
         """ Function to optimize a list of individuals with an genetic algorithm from the deap library
 
         Args:
-            self - holds the toolbox
-            individuals - dictionaries that hold the genes of the individual (parameters) and the evaluate/function values
-            fitnesses -
+            individuals (list) - a list of lists with parameters of the individuals
+            fitnesses (list) - the list of fitnesses of the corresponding individuals
 
         Returns:
-            None - the base individual is written on self.default_individual
+            population - the optimized population as created from the individuals and their fitnesses
 
         """
-        population = self.evaluate_finished_calculations(individuals=individuals,
-                                                         fitnesses=fitnesses)
+        population = self.evaluate_finished_calculations(individuals, fitnesses)
 
         # population = self.select_best_individuals(population=population)
 
@@ -347,22 +397,19 @@ class EAToolbox:
 
         population = self.generate_offspring(population, self.cxpb, self.mutpb, self.pop_size)
 
-        # population = algorithms.varAnd(population=population,
-        #                                toolbox=self.toolbox,
-        #                                cxpb=self.cxpb,
-        #                                mutpb=self.mutpb)
-
         return population
 
     def optimize_linear(self,
                         initial_values: List[float],
-                        function) -> List[float]:
+                        function,
+                        fitness_retriever) -> List[float]:
         """ Function to optimize one solution linear by using the mystic library
 
         Args:
-            initial_values: the initial solution that the solver starts with
-            function: the callback function that sends out the task to the database, awaits the result and takes it
+            initial_values (list) - the initial solution that the solver starts with
+            function (callable) - the callback function that sends out the task to the database, awaits the result and takes it
             back in
+            fitness_retriever (callable) -
 
         Returns:
             solution: a linear optimized solution
@@ -372,9 +419,18 @@ class EAToolbox:
 
         solver.SetInitialPoints(x0=initial_values)
         solver.SetStrictRanges(self.low, self.up)
-        solver.SetEvaluationLimits(generations=self.maxf)
+        solver.SetEvaluationLimits(evaluations=self.maxf)  # self.maxf
         solver.SetTermination(CRT(self.xtol, self.ftol))
 
         solver.Solve(function)
 
-        return list(solver.Solution()), solver.fit
+        # Create manually individual that will be overwritten with newly generated values
+        individual = self.toolbox.individual
+        individual[:] = solver.Solution()  # replace only numbers but keep fitness attribute
+
+        scalar_fitness = fitness_retriever()
+        individual.fitness.values = [value / len(self.weights) for value in scalar_fitness]
+
+        self.select_best_individuals(population=[individual])
+
+        return list(solver.Solution())

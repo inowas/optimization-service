@@ -233,6 +233,10 @@ class OptimizationManager:
         return self._session.query(self._ot_model).\
             filter(self._ot_model.optimization_id == self._current_oid).first()
 
+    def latest_scalar_fitness_of_linear_optimization(self):
+        return self._session.query(self._ot_model).\
+            filter(self._ot_model.optimization_id == self.current_ot.optimization_id).last().scalar_fitness
+
     def query_finished_calculation_tasks(self,
                                          generation: int) -> Session.query:
         """
@@ -497,7 +501,8 @@ class OptimizationManager:
         :return:
         """
         return self._current_eat.optimize_linear(solution=self._current_odata["result"],
-                                                 function=self.linear_optimization_queue)
+                                                 function=self.linear_optimization_queue,
+                                                 fitness_retriever=self.latest_scalar_fitness_of_linear_optimization())
 
     def manage_any_optimization(self) -> Union[List[float], List[List[float]]]:
         """ Manager for any kind of optimization that handles both offered types (genetic and linear). Primarily this
@@ -611,11 +616,12 @@ class OptimizationManager:
                                          tables=[self._oh_model.__table__],
                                          checkfirst=True)
 
-                solution = self.manage_any_optimization()
+                solutions, fitnisses = self.manage_any_optimization()
 
                 optimization_task = self.current_ot
 
-                optimization_task.solution = solution
+                optimization_task.solution = solutions
+                optimization_task.scalar_fitness = [self.linear_scalarization(fitness) for fitness in fitnisses]
                 optimization_task.optimization_state = OPTIMIZATION_FINISH
                 self._session.commit()
 
