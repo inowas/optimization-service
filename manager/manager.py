@@ -500,9 +500,12 @@ class OptimizationManager:
 
         :return:
         """
-        return self._current_eat.optimize_linear(solution=self._current_odata["result"],
-                                                 function=self.linear_optimization_queue,
-                                                 fitness_retriever=self.latest_scalar_fitness_of_linear_optimization())
+
+        self._current_eat.optimize_linear(solution=self._current_odata["result"],
+                                          function=self.linear_optimization_queue,
+                                          fitness_retriever=self.latest_scalar_fitness_of_linear_optimization())
+
+        return self._current_eat.get_solutions_and_fitnesses()
 
     def manage_any_optimization(self) -> Union[List[float], List[List[float]]]:
         """ Manager for any kind of optimization that handles both offered types (genetic and linear). Primarily this
@@ -604,7 +607,7 @@ class OptimizationManager:
                 self._current_vmap = variable_map
 
                 # Set temporary attributes
-                self._current_eat = self._ea_toolbox(
+                self._current_eat = self._ea_toolbox.from_data(
                     bounds=variable_bounds,
                     weights=self.optimization_weights,  # from self.optimization_data
                     parameters=self._current_odata["parameters"]
@@ -616,12 +619,12 @@ class OptimizationManager:
                                          tables=[self._oh_model.__table__],
                                          checkfirst=True)
 
-                solutions, fitnisses = self.manage_any_optimization()
+                solutions, fitnesses = self.manage_any_optimization()
 
                 optimization_task = self.current_ot
 
                 optimization_task.solution = solutions
-                optimization_task.scalar_fitness = [self.linear_scalarization(fitness) for fitness in fitnisses]
+                optimization_task.scalar_fitness = [self.linear_scalarization(fitness) for fitness in fitnesses]
                 optimization_task.optimization_state = OPTIMIZATION_FINISH
                 self._session.commit()
 
