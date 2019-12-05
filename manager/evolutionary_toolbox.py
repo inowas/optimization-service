@@ -472,7 +472,8 @@ class EAToolbox:
             initial_values (list) - the initial solution that the solver starts with
             function (callable) - the callback function that sends out the task to the database, awaits the result and takes it
             back in
-            fitness_retriever (callable) -
+            fitness_retriever (callable) - set function that returns the fitness for evaluation of the
+            solution found by the linear optimization
 
         Returns:
             solution: a linear optimized solution
@@ -484,11 +485,11 @@ class EAToolbox:
         solver = NelderMeadSimplexSolver(dim=len(initial_values))
 
         solver.SetInitialPoints(x0=initial_values)
-        solver.SetStrictRanges(self._low, self._up)
-        solver.SetEvaluationLimits(evaluations=self._maxf)  # self.maxf
-        solver.SetTermination(CRT(self._xtol, self._ftol))
+        solver.SetStrictRanges(min=self._low, max=self._up)
+        solver.SetEvaluationLimits(evaluations=self._maxf)
+        solver.SetTermination(termination=CRT(xtol=self._xtol, ftol=self._ftol))
 
-        solver.Solve(function)
+        solver.Solve(cost=function)
 
         # Create manually individual that will be overwritten with newly generated values
         individual = self._toolbox.individual

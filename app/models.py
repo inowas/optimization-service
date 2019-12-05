@@ -23,7 +23,7 @@ class OptimizationTask(Base):
     current_generation = Column(Integer)
     total_generation = Column(Integer)
     solution = Column(ARRAY(Float))
-    scalar_fitness = Column(Float)
+    fitness = Column(ARRAY(Float))
 
     def __init__(self, author, project, optimization_id, optimization_type, optimization_state, total_population,
                  total_generation, solution, **args):
@@ -40,7 +40,7 @@ class OptimizationTask(Base):
         self.current_generation = 0
         self.total_generation = total_generation
         self.solution = solution
-        self.scalar_fitness = INITIAL_SCALAR_FITNESS
+        self.fitness = []
 
 
 class CalculationTask(Base):

@@ -12,14 +12,14 @@ from evolutionary_toolbox import EAToolbox
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "opt_app"))
-from helpers.functions import create_input_and_output_filepath, load_json, write_json, \
-    get_table_for_optimization_id, get_schema_and_refresolver   # noqa: E402
+from helpers.functions import load_json, write_json, get_table_for_optimization_id, get_schema_and_refresolver   # noqa: E402
 from db import Session, engine  # noqa: E402
 from models import Base, OptimizationTask, CalculationTask, OptimizationHistory  # noqa: E402
 from helpers.config import OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, CALCULATION_FOLDER, INDIVIDUAL_PARAMETERS_FOLDER, \
-    OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, OPTIMIZATION_FINISH, \
-    MAX_STORING_TIME_OPTIMIZATION_TASKS, OPTIMIZATION_ABORT, ODATA_FILENAME, MDATA_FILENAME, JSON_ENDING, \
+    ODATA_FILENAME, MDATA_FILENAME, JSON_ENDING, \
     SCHEMA_MODFLOW_MODEL_DATA, STATUS_REGULAR_CALCULATION  # noqa: E402
+from helpers.config import OPTIMIZATION_START, CALCULATION_START, OPTIMIZATION_RUN, CALCULATION_FINISH, \
+    OPTIMIZATION_FINISH, OPTIMIZATION_ABORT
 
 
 class OptimizationManager:
@@ -235,7 +235,8 @@ class OptimizationManager:
 
     def latest_scalar_fitness_of_linear_optimization(self):
         return self._session.query(self._ot_model).\
-            filter(self._ot_model.optimization_id == self.current_ot.optimization_id).last().scalar_fitness
+            filter(self._ot_model.optimization_id == self.current_ot.optimization_id).\
+            order_by(self._ot_model.optimization_id.desc()).first().fitness
 
     def query_finished_calculation_tasks(self,
                                          generation: int) -> Session.query:
@@ -377,14 +378,15 @@ class OptimizationManager:
                                                individual=individual)
 
     def linear_optimization_queue(self,
-                                  individual: List[float]):
+                                  individual):  # : List[float]
         """
 
         :param individual:
         :return:
         """
 
-        calculation_task = self._session.query(self._ct_model).last()
+        calculation_task = self._session.query(self._ct_model).\
+            order_by(self._ct_model.optimization_id.desc(), self._ct_model.calculation_id.desc()).first()
 
         try:
             generation = calculation_task.generation + 1
@@ -407,7 +409,7 @@ class OptimizationManager:
 
         optimization_task = self.current_ot
 
-        optimization_task.scalar_fitness = scalar_solution
+        optimization_task.fitness = [scalar_solution]
         self._session.commit()
 
         return scalar_solution
@@ -501,9 +503,9 @@ class OptimizationManager:
         :return:
         """
 
-        self._current_eat.optimize_linear(solution=self._current_odata["result"],
+        self._current_eat.optimize_linear(initial_values=self.read_optimization_data()[2],
                                           function=self.linear_optimization_queue,
-                                          fitness_retriever=self.latest_scalar_fitness_of_linear_optimization())
+                                          fitness_retriever=self.latest_scalar_fitness_of_linear_optimization)
 
         return self._current_eat.get_solutions_and_fitnesses()
 
@@ -517,13 +519,13 @@ class OptimizationManager:
         optimization_task = self._session.query(self._ot_model)\
             .filter(self._ot_model.optimization_id == self._current_oid).first()
 
-        assert optimization_task.optimization_type in ["GA", "LO"], \
-            "Error: optimization_type is neither 'GA' nor 'LO'"
+        assert optimization_task.optimization_type in ["GA", "Simplex"], \
+            "Error: optimization_type is neither 'GA' nor 'Simplex'"
 
         if optimization_task.optimization_type == "GA":
             return self.manage_evolutionary_optimization()
 
-        if optimization_task.optimization_type == "LO":
+        if optimization_task.optimization_type == "Simplex":
             return self.manage_linear_optimization()
 
     # def remove_optimization_and_calculation_data(self) -> None:
@@ -624,7 +626,7 @@ class OptimizationManager:
                 optimization_task = self.current_ot
 
                 optimization_task.solution = solutions
-                optimization_task.scalar_fitness = [self.linear_scalarization(fitness) for fitness in fitnesses]
+                optimization_task.fitness = [self.linear_scalarization(fitness) for fitness in fitnesses]
                 optimization_task.optimization_state = OPTIMIZATION_FINISH
                 self._session.commit()
 

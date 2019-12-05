@@ -16,10 +16,12 @@ from models import OptimizationTask, OptimizationHistory
 
 from helpers.functions import get_table_for_optimization_id, \
     write_json, get_schema_and_refresolver
-from helpers.config import SCHEMA_INOWAS_OPTIMIZATION, OPTIMIZATION_RUN, \
-    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, JSON_ENDING, OPTIMIZATION_ABORT, OPTIMIZATION_STOP, OPTIMIZATION_FINISH
+from helpers.config import SCHEMA_INOWAS_OPTIMIZATION, \
+    OPTIMIZATION_DATA, OPTIMIZATION_FOLDER, JSON_ENDING
+from helpers.config import OPTIMIZATION_START, OPTIMIZATION_RUN, OPTIMIZATION_ABORT, OPTIMIZATION_FINISH
 
 optimization_blueprint = Blueprint("optimization", __name__)
+
 
 # Main page
 @optimization_blueprint.route("/upload", methods=['GET', 'POST'])
@@ -55,21 +57,17 @@ def upload_file() -> jsonify:
         author = request_data.get("author", "unknown")
         project = request_data.get("project", "unknown")
         optimization_id = request_data["optimization_id"]
-        optimization_state = request_data.get("type", "optimization_start")  # expect optimization_stop, otherwise start
-
-        if optimization_state == OPTIMIZATION_STOP:
-            return redirect(f"/optimization/abort/{optimization_id}")
 
         method = request_data["optimization"]["parameters"]["method"]
-        population_size = request_data["optimization"]["parameters"]["pop_size"]
-        total_generation = request_data["optimization"]["parameters"]["ngen"]
+        population_size = request_data["optimization"]["parameters"].get("pop_size", 1)
+        total_generation = request_data["optimization"]["parameters"].get("ngen", 1)
 
         optimizationtask = OptimizationTask(
                                 author=author,
                                 project=project,
                                 optimization_id=optimization_id,
                                 optimization_type=method,
-                                optimization_state=optimization_state,  # Input: "optimization_start"
+                                optimization_state=OPTIMIZATION_START,  # Input: "optimization_start"
                                 total_population=population_size,
                                 total_generation=total_generation,
                                 solution=dict()
@@ -92,15 +90,13 @@ def upload_file() -> jsonify:
             Session.commit()
         except (UnicodeDecodeError, IOError):
             rmtree(Path(OPTIMIZATION_DATA, optimization_id))
-            # Path(opt_filepath).unlink()
-            #
             Path(data_filepath).unlink()
 
             Session.rollback()
 
             return abort(400, "Error: task couldn't be created!")
 
-        return redirect(f"/optimization")  # /{optimization_id}
+        return redirect(f"/optimization")
 
     if request.method == 'GET':
         if request.content_type == "application/json":
@@ -118,8 +114,6 @@ def show_all_optimizations():
         optimization_tasks = Session.query(OptimizationTask).statement
 
         optimization_tasks_df = pd.read_sql(optimization_tasks, Session.bind)
-
-        # optimization_tasks_df = optimization_tasks_df.drop(["data_filepath"], axis=1)
 
         return optimization_tasks_df.to_html()
 
