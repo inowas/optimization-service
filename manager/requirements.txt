@@ -2,7 +2,7 @@ numpy==1.17.2
 
 deap==1.3.0
 Flask==1.1.1
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
 mystic==0.3.4
 pandas==0.25.1
 psycopg2-binary==2.8.3
